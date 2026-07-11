@@ -1,0 +1,9 @@
+:root { font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f1f1f; background: #f5f7fa; }
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; min-width: 1180px; height: 100%; margin: 0; }
+body { overflow: hidden; }
+.demo-page { height: 100%; padding: 18px 20px 20px; background: #f5f7fa; }
+.demo-heading { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 2px 14px; }
+.demo-heading span { color: #8c8c8c; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.demo-heading h1 { margin: 2px 0 0; color: #1f1f1f; font-size: 20px; line-height: 1.2; }
+.demo-page > .app-shell { height: calc(100% - 54px); }
