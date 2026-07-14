@@ -166,6 +166,12 @@ export function requestSavePageReview(page: any, review: any) {
   formData.append('widget_description', review.widget_description || '');
   formData.append('keep_images', JSON.stringify(review.keep_images || []));
   formData.append('ai_inference', JSON.stringify(review.ai_inference || {}));
+  formData.append('action', JSON.stringify(review.action || {
+    popupAction: [],
+    stateAction: [],
+    externalAction: [],
+    pageNaviAction: [],
+  }));
   formData.append('ai_recursive', String(Boolean(review.ai_recursive)));
   (review.new_images || []).forEach((file: File) => formData.append('new_images', file));
 

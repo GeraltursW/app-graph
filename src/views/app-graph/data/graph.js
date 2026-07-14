@@ -27,6 +27,8 @@ export function applyPageReviewToGraph(graph, nodeId, review = {}) {
         ...page.aiInference,
         ...(review.ai_inference || {})
       },
+      action: normalizePageAction({ action: review.action ?? page.action }),
+      pageActions: flattenPageAction(normalizePageAction({ action: review.action ?? page.action })),
       review_status: review.review_status || "edited",
       review_note: review.review_note || ""
     };
@@ -56,6 +58,7 @@ export function normalizeBackendGraph(payload) {
     const nextTitleCount = (titleCounts.get(rawTitle) || 0) + 1;
     titleCounts.set(rawTitle, nextTitleCount);
 
+    const action = normalizePageAction(rawNode);
     const node = {
       nodeId: stableId,
       backendId: rawNode.id ?? null,
@@ -70,7 +73,8 @@ export function normalizeBackendGraph(payload) {
       widget_description: getWidgetDescription(rawNode),
       ai_recursive: Boolean(rawNode.ai_recursive ?? rawNode.page_info?.ai_recursive),
       children: Array.isArray(rawNode.children) ? rawNode.children : [],
-      pageActions: extractPageActions(rawNode),
+      action,
+      pageActions: flattenPageAction(action),
       titleRepeatIndex: nextTitleCount,
       displayTitle: nextTitleCount > 1 ? `${rawTitle} #${nextTitleCount}` : rawTitle,
       level: depth,
@@ -220,6 +224,7 @@ export function addFloatingPageToGraph(graph, rawNode = {}) {
     widget_description: "",
     ai_recursive: Boolean(source.ai_recursive),
     children: [],
+    action: createEmptyAction(),
     pageActions: [],
     titleRepeatIndex: 1,
     level: 1,
@@ -320,6 +325,38 @@ export function groupPageActions(actions = []) {
   }, {});
 }
 
+export const ACTION_GROUPS = [
+  { key: "popupAction", label: "弹窗动作", effectType: "overlay" },
+  { key: "stateAction", label: "状态动作", effectType: "state_change" },
+  { key: "externalAction", label: "外部动作", effectType: "external" },
+  { key: "pageNaviAction", label: "页面跳转动作", effectType: "navigate" }
+];
+
+export function createEmptyAction() {
+  return Object.fromEntries(ACTION_GROUPS.map(({ key }) => [key, []]));
+}
+
+export function normalizePageAction(rawNode = {}) {
+  const source = rawNode.action ?? rawNode.page_actions ?? rawNode.pageActions;
+  if (source && !Array.isArray(source) && typeof source === "object") {
+    return Object.fromEntries(ACTION_GROUPS.map(({ key, effectType }) => [
+      key,
+      asArray(source[key]).map((item, index) => normalizeAction(item, index, effectType))
+    ]));
+  }
+
+  const grouped = createEmptyAction();
+  extractPageActions(rawNode).forEach((item) => {
+    const group = ACTION_GROUPS.find(({ effectType }) => effectType === item.effect_type);
+    if (group) grouped[group.key].push(item);
+  });
+  return grouped;
+}
+
+export function flattenPageAction(action = {}) {
+  return ACTION_GROUPS.flatMap(({ key }) => asArray(action[key]));
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -356,7 +393,8 @@ function extractPageActions(rawNode) {
     .filter((action) => action.effect_type !== "navigate");
 }
 
-function normalizeAction(item, index) {
+function normalizeAction(item, index, forcedEffectType = "") {
+  const { raw: _legacyRaw, ...source } = item;
   const label = String(
     item.label ||
     item.text ||
@@ -367,19 +405,22 @@ function normalizeAction(item, index) {
     `action-${index + 1}`
   );
   const rawType = String(item.effect_type || item.effectType || item.action_effect || item.type || "").toLowerCase();
-  const effectType = inferEffectType(label, rawType, item);
+  const effectType = forcedEffectType || inferEffectType(label, rawType, item);
 
-  return {
+  const normalized = {
+    ...source,
     id: item.id || item.widget_id || item.key || `action-${index + 1}`,
     label,
     action_type: item.action_type || item.actionType || "tap",
     effect_type: effectType,
-    state_key: item.state_key || item.stateKey || inferStateKey(label),
-    state_value: item.state_value ?? item.stateValue ?? null,
     confidence: item.confidence ?? null,
-    description: item.description || item.reason || item.function_desc || "",
-    raw: item
+    description: item.description || item.reason || item.function_desc || ""
   };
+  if (effectType === "state_change") {
+    normalized.state_key = item.state_key || item.stateKey || inferStateKey(label);
+    normalized.state_value = item.state_value ?? item.stateValue ?? null;
+  }
+  return normalized;
 }
 
 function inferEffectType(label, rawType, item) {

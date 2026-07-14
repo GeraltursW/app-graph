@@ -757,28 +757,86 @@ h2 {
   min-height: 0;
 }
 
-.canvas-mode-toggle {
-  position: absolute;
-  z-index: 25;
-  top: 16px;
-  right: 18px;
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgba(147, 197, 253, .9);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .96);
-  color: var(--primary);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 900;
-  box-shadow: var(--shadow-soft);
+.g6-graph-area {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #edf6ff 0%, #f8fbff 52%, #e7f1ff 100%);
 }
 
-.canvas-mode-toggle:hover,
-.canvas-mode-toggle.active {
-  border-color: #4096ff;
-  background: rgba(255, 255, 255, .98);
+.g6-canvas {
+  position: absolute;
+  inset: 64px 0 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  background-color: transparent;
+  background-image: radial-gradient(circle, rgba(91, 135, 186, 0.28) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.g6-canvas canvas {
+  display: block;
+}
+
+.g6-rendering {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 8;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #526176;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(39, 74, 116, 0.12);
+  pointer-events: none;
+}
+
+.g6-graph-area .g6-minimap {
+  border: 1px solid #d7e0ec;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 22px rgba(40, 79, 128, 0.14);
+}
+
+.graph-node-tooltip {
+  position: absolute;
+  z-index: 30;
+  top: 64px;
+  right: 16px;
+  display: grid;
+  width: min(300px, calc(100% - 32px));
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid rgba(147, 197, 253, .78);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 14px 36px rgba(35, 74, 120, .18);
+  pointer-events: none;
+}
+
+.graph-node-tooltip strong {
+  color: #102a4c;
+  font-size: 13px;
+}
+
+.graph-node-tooltip p {
+  max-height: 96px;
+  margin: 0;
+  overflow: auto;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.graph-node-tooltip span {
+  overflow: hidden;
   color: #1677ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .relation-flow {
@@ -1223,6 +1281,36 @@ h2 {
   font-weight: 900;
 }
 
+.image-preview-nav {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .42);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, .78);
+  color: #ffffff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .28);
+  transform: translateY(-50%);
+}
+
+.image-preview-nav:hover {
+  border-color: #ffffff;
+  background: #1677ff;
+  color: #ffffff;
+}
+
+.image-preview-prev {
+  left: -64px;
+}
+
+.image-preview-next {
+  right: -64px;
+}
+
 .image-preview-caption {
   position: absolute;
   right: 18px;
@@ -1642,6 +1730,7 @@ h2 {
 }
 
 .review-editor input[type="text"],
+.review-editor select,
 .review-editor textarea {
   width: 100%;
   min-width: 0;
@@ -1662,6 +1751,7 @@ h2 {
 }
 
 .review-editor input:focus,
+.review-editor select:focus,
 .review-editor textarea:focus {
   border-color: #1769e0;
   box-shadow: 0 0 0 3px rgba(23, 105, 224, .12);
@@ -1685,6 +1775,91 @@ h2 {
 .review-check input {
   width: 16px;
   height: 16px;
+}
+
+.action-review-editor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.action-review-head,
+.action-review-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-review-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.action-review-head strong {
+  color: #102a4c;
+  font-size: 13px;
+}
+
+.action-review-head span,
+.action-review-empty {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.action-review-groups {
+  background: transparent;
+}
+
+.action-review-groups :where(.ant-collapse-item) {
+  border-color: #dbeafe;
+}
+
+.action-review-groups :where(.ant-collapse-header) {
+  padding: 9px 4px !important;
+  color: #1e3a5f !important;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.action-review-groups :where(.ant-collapse-content-box) {
+  padding: 4px 0 12px !important;
+}
+
+.action-review-list {
+  display: grid;
+  gap: 9px;
+}
+
+.action-review-item {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.action-review-item-head strong {
+  color: #475569;
+  font-size: 11px;
+}
+
+.action-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.action-review-empty {
+  padding: 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  text-align: center;
 }
 
 .image-editor {
@@ -2150,26 +2325,6 @@ h2 {
   font-weight: 600;
 }
 
-.canvas-mode-toggle {
-  top: 16px;
-  right: 16px;
-  border-color: #d9d9d9;
-  border-radius: 4px;
-  box-shadow: none;
-}
-
-.canvas-mode-toggle.graph-button:hover:not(:disabled) {
-  border-color: #4096ff;
-  background: #ffffff;
-  color: #1677ff;
-}
-
-.canvas-mode-toggle.graph-button.tone-primary:hover:not(:disabled) {
-  border-color: #4096ff;
-  background: #1677ff;
-  color: #ffffff;
-}
-
 .replay-floating-trigger {
   top: 58px;
   right: 16px;
@@ -2217,8 +2372,7 @@ h2 {
 /* Keep controls on native Ant Design button states. */
 .inspector-edit-toggle.ant-btn,
 .drag-mode-toggle.ant-btn,
-.drag-handle.ant-btn,
-.canvas-mode-toggle.ant-btn {
+.drag-handle.ant-btn {
   height: 32px;
   padding: 4px 15px;
   border-radius: 6px;
@@ -2230,8 +2384,7 @@ h2 {
 }
 
 .inspector-edit-toggle.ant-btn-primary,
-.drag-mode-toggle.ant-btn-primary,
-.canvas-mode-toggle.ant-btn-primary {
+.drag-mode-toggle.ant-btn-primary {
   border-color: #1677ff;
   background: #1677ff;
   color: #ffffff;
@@ -2239,16 +2392,14 @@ h2 {
 
 .inspector-edit-toggle.ant-btn:hover,
 .drag-mode-toggle.ant-btn:hover:not(:disabled),
-.drag-handle.ant-btn:hover,
-.canvas-mode-toggle.ant-btn:hover {
+.drag-handle.ant-btn:hover {
   border-color: #4096ff;
   background: #ffffff;
   color: #4096ff;
 }
 
 .inspector-edit-toggle.ant-btn-primary:hover,
-.drag-mode-toggle.ant-btn-primary:hover:not(:disabled),
-.canvas-mode-toggle.ant-btn-primary:hover {
+.drag-mode-toggle.ant-btn-primary:hover:not(:disabled) {
   border-color: #4096ff;
   background: #4096ff;
   color: #ffffff;

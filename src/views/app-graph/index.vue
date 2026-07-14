@@ -12,10 +12,6 @@ import GraphButton from "./components/shared/GraphButton.vue";
 import GraphCanvas from "./components/GraphCanvas.vue";
 import InspectorPanel from "./components/InspectorPanel.vue";
 import TreeNav from "./components/TreeNav.vue";
-import "@vue-flow/core/dist/style.css";
-import "@vue-flow/core/dist/theme-default.css";
-import "@vue-flow/controls/dist/style.css";
-import "@vue-flow/minimap/dist/style.css";
 import "./style.css";
 import {
   addFloatingPageToGraph,
@@ -44,7 +40,6 @@ const selected = ref({ type: "node", id: "" });
 const keyword = ref("");
 const layoutMode = ref("horizontal");
 const toolAction = ref("");
-const compactMode = ref(false);
 const graphRef = ref(null);
 const layoutRevision = ref(0);
 const loading = ref(false);
@@ -136,18 +131,26 @@ function resetGraph() {
   layoutRevision.value += 1;
   graphRef.value?.resetLayout();
 }
-function handleToolAction(value) {
+async function exportGraph() {
+  await graphRef.value?.exportGraph();
+  createMessage.success('整张图谱已导出为 PNG');
+}
+async function handleToolAction(value) {
   toolAction.value = value;
   const actions = {
     fit: fitGraph,
     expand: expandGraph,
     collapse: collapseGraph,
-    reset: resetGraph
+    reset: resetGraph,
+    export: exportGraph
   };
-  actions[value]?.();
-  window.requestAnimationFrame(() => {
+  try {
+    await actions[value]?.();
+  } catch (error) {
+    createMessage.error(error instanceof Error ? error.message : '图谱操作失败');
+  } finally {
     toolAction.value = "";
-  });
+  }
 }
 
 
@@ -442,12 +445,10 @@ onMounted(loadInitialApps);
         :graph="graph"
         :loading="loading"
 
-        :compact-mode="compactMode"
         :layout-mode="layoutMode"
         :layout-revision="layoutRevision"
         :keyword="keyword"
         :selected="selected"
-        @toggle-compact-mode="compactMode = !compactMode"
         @select-node="selectNode"
         @select-edge="selectEdge"
       />

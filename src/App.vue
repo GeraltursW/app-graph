@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppGraph from './views/app-graph/index.vue';
+import PromoJourney from './views/app-graph/components/PromoJourney.vue';
 </script>
 
 <template>
@@ -9,7 +10,7 @@ import AppGraph from './views/app-graph/index.vue';
         <span>Mobile Intelligence</span>
         <h1>Application Map</h1>
       </div>
-      <a-tag color="blue">Interactive Demo</a-tag>
+      <PromoJourney />
     </div>
     <AppGraph />
   </main>

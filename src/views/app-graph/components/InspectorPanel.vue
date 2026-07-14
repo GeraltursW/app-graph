@@ -7,6 +7,8 @@ import SmartImage from "./shared/SmartImage.vue";
 import { Badge, Card, CardContent, CardHeader, CardTitle, ScrollArea } from "./ui";
 import { buildImageApiUrl } from "../info.api";
 import {
+  ACTION_GROUPS,
+  createEmptyAction,
   getAncestorPath,
   getIncomingEdges,
   getOutgoingEdges,
@@ -37,12 +39,14 @@ const props = defineProps({
 const emit = defineEmits(["save-page-review", "delete-node"]);
 const { createMessage } = useMessage();
 
-const previewImage = ref(null);
+const previewIndex = ref(-1);
 const editorState = ref("view");
 const editMode = computed(() => editorState.value !== "view");
 const saving = computed(() => editorState.value === "saving");
 const saveMessage = ref("");
 const form = reactive(createEmptyForm());
+const previewImages = computed(() => detail.value?.images || []);
+const previewImage = computed(() => previewImages.value[previewIndex.value] || null);
 
 const detail = computed(() => {
   if (!props.payload) return null;
@@ -106,7 +110,7 @@ const detail = computed(() => {
       page_url: page.page_url,
       widget_description: page.widget_description,
       page_info: page.page_info,
-      page_actions: page.pageActions,
+      action: page.action,
       ai_inference: page.aiInference,
       review_status: page.review_status,
       review_note: page.review_note,
@@ -131,6 +135,7 @@ const detail = computed(() => {
 });
 
 watch(() => props.payload, () => {
+  previewIndex.value = -1;
   hydrateForm();
   editorState.value = "view";
 }, { immediate: true });
@@ -146,6 +151,7 @@ function createEmptyForm() {
     ai_recursive: false,
     ai_inference_label: "",
     ai_inference_reason: "",
+    action: createEmptyAction(),
     image_urls: [],
     new_images: [],
     review_note: ""
@@ -167,6 +173,7 @@ function hydrateForm() {
     ai_recursive: Boolean(page.ai_recursive),
     ai_inference_label: page.aiInference?.label || "",
     ai_inference_reason: page.aiInference?.reason || "",
+    action: cloneAction(page.action),
     image_urls: normalizeImageUrls(page),
     review_note: page.review_note || ""
   });
@@ -198,7 +205,17 @@ function imageItemsForPage(page, kind) {
 }
 
 function openImagePreview(image) {
-  previewImage.value = image;
+  previewIndex.value = previewImages.value.findIndex((item) => item === image);
+}
+
+function closeImagePreview() {
+  previewIndex.value = -1;
+}
+
+function moveImagePreview(direction) {
+  const count = previewImages.value.length;
+  if (count < 2) return;
+  previewIndex.value = (previewIndex.value + direction + count) % count;
 }
 
 function handleNewImages(event) {
@@ -210,6 +227,35 @@ function removeNewImage(index) {
 }
 function removeImage(index) {
   form.image_urls.splice(index, 1);
+}
+
+function cloneAction(action = {}) {
+  return Object.fromEntries(ACTION_GROUPS.map(({ key }) => [
+    key,
+    (action?.[key] || []).map((item) => ({ ...item }))
+  ]));
+}
+
+function addAction(groupKey) {
+  form.action[groupKey].push({
+    id: `manual-${Date.now()}`,
+    label: "",
+    action_type: "tap",
+    description: ""
+  });
+}
+
+function removeAction(groupKey, index) {
+  form.action[groupKey].splice(index, 1);
+}
+
+function actionTargetField(groupKey) {
+  return {
+    popupAction: { key: "popup_name", label: "弹窗/面板名称" },
+    stateAction: { key: "state_key", label: "状态字段" },
+    externalAction: { key: "target", label: "外部目标" },
+    pageNaviAction: { key: "target_page_id", label: "目标页面 ID" }
+  }[groupKey];
 }
 
 async function saveEdit() {
@@ -229,7 +275,8 @@ async function saveEdit() {
     ai_inference: {
       label: form.ai_inference_label,
       reason: form.ai_inference_reason
-    }
+    },
+    action: cloneAction(form.action)
   };
   try {
     await new Promise((resolve, reject) => {
@@ -337,6 +384,79 @@ async function saveEdit() {
               AI 推断理由
               <textarea v-model="form.ai_inference_reason" rows="4" />
             </label>
+
+            <section class="action-review-editor">
+              <div class="action-review-head">
+                <div>
+                  <strong>页面动作人工复核</strong>
+                  <span>按动作效果分类，保存时整体覆盖 AI 判断结果</span>
+                </div>
+                <Badge variant="secondary">
+                  {{ ACTION_GROUPS.reduce((total, group) => total + form.action[group.key].length, 0) }} 项
+                </Badge>
+              </div>
+
+              <a-collapse class="action-review-groups" :bordered="false">
+                <a-collapse-panel
+                  v-for="group in ACTION_GROUPS"
+                  :key="group.key"
+                  :header="`${group.label} (${form.action[group.key].length})`"
+                >
+                  <div class="action-review-list">
+                    <div
+                      v-for="(item, actionIndex) in form.action[group.key]"
+                      :key="item.id || `${group.key}-${actionIndex}`"
+                      class="action-review-item"
+                    >
+                      <div class="action-review-item-head">
+                        <strong>动作 {{ actionIndex + 1 }}</strong>
+                        <GraphButton danger html-type="button" @click="removeAction(group.key, actionIndex)">
+                          <template #icon><Icon icon="ant-design:delete-outlined" :size="13" /></template>
+                          删除
+                        </GraphButton>
+                      </div>
+                      <div class="action-review-grid">
+                        <label>
+                          控件/动作名称
+                          <input v-model="item.label" type="text" placeholder="例如：点赞、打开消息" />
+                        </label>
+                        <label>
+                          触发方式
+                          <select v-model="item.action_type">
+                            <option value="tap">点击</option>
+                            <option value="long_press">长按</option>
+                            <option value="swipe">滑动</option>
+                            <option value="input">输入</option>
+                            <option value="back">返回</option>
+                            <option value="deeplink">Deep Link</option>
+                          </select>
+                        </label>
+                        <label>
+                          {{ actionTargetField(group.key).label }}
+                          <input v-model="item[actionTargetField(group.key).key]" type="text" />
+                        </label>
+                        <label v-if="group.key === 'stateAction'">
+                          状态值
+                          <input v-model="item.state_value" type="text" placeholder="例如：true / collected" />
+                        </label>
+                      </div>
+                      <label>
+                        人工确认说明
+                        <textarea v-model="item.description" rows="2" />
+                      </label>
+                    </div>
+                    <div v-if="!form.action[group.key].length" class="action-review-empty">
+                      当前没有{{ group.label }}
+                    </div>
+                    <GraphButton html-type="button" @click="addAction(group.key)">
+                      <template #icon><Icon icon="ant-design:plus-outlined" :size="13" /></template>
+                      添加{{ group.label }}
+                    </GraphButton>
+                  </div>
+                </a-collapse-panel>
+              </a-collapse>
+            </section>
+
             <label>
               复核备注
               <textarea v-model="form.review_note" rows="3" placeholder="记录为什么修改，便于后端审计" />
@@ -514,10 +634,21 @@ async function saveEdit() {
     <div v-else class="empty-state inspector-empty">请选择一个图谱节点</div>
 
     <Teleport to="body">
-      <div v-if="previewImage" class="image-preview-overlay" @click="previewImage = null">
+      <div v-if="previewImage" class="image-preview-overlay" @click="closeImagePreview">
         <div class="image-preview-shell inspector-preview-shell" @click.stop>
-          <GraphButton class="image-preview-close" icon-only html-type="button" aria-label="关闭预览" title="关闭预览" @click="previewImage = null">
+          <GraphButton class="image-preview-close" icon-only html-type="button" aria-label="关闭预览" title="关闭预览" @click="closeImagePreview">
             <Icon icon="ant-design:close-outlined" :size="16" />
+          </GraphButton>
+          <GraphButton
+            v-if="previewImages.length > 1"
+            class="image-preview-nav image-preview-prev"
+            icon-only
+            html-type="button"
+            aria-label="上一张截图"
+            title="上一张截图"
+            @click="moveImagePreview(-1)"
+          >
+            <Icon icon="ant-design:left-outlined" :size="20" />
           </GraphButton>
           <SmartImage
             class="image-preview-full"
@@ -525,9 +656,20 @@ async function saveEdit() {
             :title="previewImage.title"
             :kind="previewImage.kind"
           />
+          <GraphButton
+            v-if="previewImages.length > 1"
+            class="image-preview-nav image-preview-next"
+            icon-only
+            html-type="button"
+            aria-label="下一张截图"
+            title="下一张截图"
+            @click="moveImagePreview(1)"
+          >
+            <Icon icon="ant-design:right-outlined" :size="20" />
+          </GraphButton>
           <div class="image-preview-caption">
             <strong>{{ previewImage.title }}</strong>
-            <span>{{ previewImage.kind }}</span>
+            <span>{{ previewImage.kind }} · {{ previewIndex + 1 }}/{{ previewImages.length }}</span>
           </div>
         </div>
       </div>

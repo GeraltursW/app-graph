@@ -9,6 +9,7 @@ export const toolActions = [
   { value: 'expand', label: '全部展开' },
   { value: 'collapse', label: '全部收起' },
   { value: 'reset', label: '重置布局' },
+  { value: 'export', label: '导出整图' },
 ];
 
 export const graphNodeBox = {
