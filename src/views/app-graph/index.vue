@@ -29,6 +29,7 @@ import {
   queryAppList,
   requestAiExploreFloatingPage,
   requestCreateOrphanNode,
+  requestDeleteNode,
   requestManualMergeFloatingPage,
   requestMergeFloatingPage,
   requestMoveNode,
@@ -52,6 +53,7 @@ const graph = ref(createEmptyGraph());
 const floatingAiState = ref({});
 const creatingOrphan = ref(false);
 const movingNodeId = ref("");
+const deletingNodeId = ref("");
 const { createMessage } = useMessage();
 
 
@@ -110,6 +112,12 @@ function selectNode(nodeId) {
 
 function selectEdge(edgeId) {
   selected.value = { type: "edge", id: edgeId };
+}
+
+function filterAppOption(input, option) {
+  const keyword = String(input || "").trim().toLowerCase();
+  const appLabel = String(option?.label || option?.value || "").toLowerCase();
+  return appLabel.includes(keyword);
 }
 
 function fitGraph() {
@@ -315,6 +323,28 @@ async function moveTreeNode({ nodeId, targetParentId }) {
   }
 }
 
+async function deleteNode(nodeId) {
+  const page = graph.value.pageMap.get(nodeId);
+  if (!page || deletingNodeId.value) return;
+  deletingNodeId.value = nodeId;
+  errorMessage.value = "";
+  createMessage.loading({ content: "正在删除节点...", key: "app-graph-delete-node", duration: 0 });
+  try {
+    await requestDeleteNode(page);
+    const payload = await queryAppGraph(appName.value.trim());
+    const normalized = normalizeBackendGraph(payload);
+    graph.value = normalized;
+    selected.value = { type: "node", id: normalized.roots[0] || normalized.floatingRoots[0] || "" };
+    layoutRevision.value += 1;
+    createMessage.success({ content: "节点删除成功", key: "app-graph-delete-node", duration: 2 });
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "节点删除失败";
+    createMessage.error({ content: errorMessage.value, key: "app-graph-delete-node", duration: 3 });
+  } finally {
+    deletingNodeId.value = "";
+  }
+}
+
 async function savePageReview(submission) {
   const review = submission?.review || submission;
   const page = graph.value.pageMap.get(review.nodeId);
@@ -345,7 +375,9 @@ onMounted(loadInitialApps);
               v-model:value="appName"
               class="app-name-select"
               :loading="appListLoading"
+              :filter-option="filterAppOption"
               placeholder="选择应用"
+              show-search
               @change="loadGraph"
             >
               <a-select-option
@@ -422,10 +454,12 @@ onMounted(loadInitialApps);
     </main>
 
     <InspectorPanel
+      :deleting="Boolean(deletingNodeId)"
       :graph="graph"
       :selected="selected"
       :payload="selectedPayload"
       @save-page-review="savePageReview"
+      @delete-node="deleteNode"
     />
   </div>
 </template>

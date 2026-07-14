@@ -134,6 +134,16 @@ export async function mockMoveNode(pageId: string, parentId: string) {
   throw new Error('目标父节点不存在');
 }
 
+export async function mockDeleteNode(pageId: string) {
+  await wait(600);
+  for (const graph of Object.values(store)) {
+    if (deleteNodeOnly(graph.roots, pageId) || deleteNodeOnly(graph.orphan_pages, pageId)) {
+      return { statue: 'success', deleted: true, page_id: pageId };
+    }
+  }
+  throw new Error('待删除节点不存在');
+}
+
 export async function mockUpdateNode(formData: FormData) {
   await wait(600);
   const pageId = String(formData.get('page_id') || '');
@@ -161,6 +171,16 @@ function findInGraph(graph: { roots: NodeRecord[]; orphan_pages: NodeRecord[] },
     return Boolean(result);
   });
   return result;
+}
+
+function deleteNodeOnly(nodes: NodeRecord[], pageId: string): boolean {
+  const index = nodes.findIndex((node) => node.page_id === pageId);
+  if (index >= 0) {
+    const [deleted] = nodes.splice(index, 1);
+    nodes.splice(index, 0, ...(deleted.children || []));
+    return true;
+  }
+  return nodes.some((node) => deleteNodeOnly(node.children || [], pageId));
 }
 
 function countNodes(nodes: NodeRecord[]): number {

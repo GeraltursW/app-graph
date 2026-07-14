@@ -2,6 +2,7 @@ import { defHttp } from '@/utils/http/axios';
 import {
   mockAppList,
   mockCreateOrphan,
+  mockDeleteNode,
   mockExplore,
   mockMoveNode,
   mockQueryGraph,
@@ -21,6 +22,7 @@ const rawRequestOptions = {
 enum Api {
   AppList = '/app_list',
   CreateOrphanNode = '/create_orphan_node',
+  DeleteNode = '/delete_node',
   MoveNode = '/move_node',
   QueryAppGraph = '/queryAppGraph',
   UpdateNode = '/update_node',
@@ -59,6 +61,18 @@ export async function requestCreateOrphanNode(appName: string, pageUrl: string) 
     throw new Error('Create orphan node response is invalid');
   }
   return payload;
+}
+
+export function requestDeleteNode(page: any) {
+  if (!page?.pageId) throw new Error('当前节点缺少后台 page_id');
+  if (USE_MOCK) return mockDeleteNode(page.pageId);
+  return defHttp.post<any>(
+    {
+      url: Api.DeleteNode,
+      data: { id: page.pageId },
+    },
+    rawRequestOptions,
+  );
 }
 
 export const requestAiExploreFloatingPage = (page: any) =>

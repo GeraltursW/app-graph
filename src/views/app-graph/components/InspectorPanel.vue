@@ -27,10 +27,14 @@ const props = defineProps({
   payload: {
     type: Object,
     default: null
+  },
+  deleting: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(["save-page-review"]);
+const emit = defineEmits(["save-page-review", "delete-node"]);
 const { createMessage } = useMessage();
 
 const previewImage = ref(null);
@@ -262,6 +266,23 @@ async function saveEdit() {
           </template>
           {{ saving ? "保存中" : (editMode ? "取消编辑" : "开启编辑") }}
         </GraphButton>
+        <a-popconfirm
+          v-if="detail?.mode === 'node'"
+          title="确认删除该节点？"
+          description="删除后无法恢复，请确认该节点不再需要。"
+          ok-text="删除"
+          cancel-text="取消"
+          placement="bottomRight"
+          :ok-button-props="{ danger: true, loading: deleting }"
+          @confirm="emit('delete-node', payload.nodeId)"
+        >
+          <GraphButton danger html-type="button" :disabled="editMode || deleting">
+            <template #icon>
+              <Icon :icon="deleting ? 'ant-design:loading-outlined' : 'ant-design:delete-outlined'" :size="14" />
+            </template>
+            {{ deleting ? "删除中" : "删除" }}
+          </GraphButton>
+        </a-popconfirm>
         <span class="panel-chip">AI</span>
       </div>
     </div>
