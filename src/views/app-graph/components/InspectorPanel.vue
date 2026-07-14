@@ -2,7 +2,7 @@
 import Icon from '@/components/Icon/Icon.vue';
 import { useMessage } from '@/hooks/web/useMessage';
 import GraphButton from "./shared/GraphButton.vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import SmartImage from "./shared/SmartImage.vue";
 import { Badge, Card, CardContent, CardHeader, CardTitle, ScrollArea } from "./ui";
 import { buildImageApiUrl } from "../info.api";
@@ -40,6 +40,7 @@ const emit = defineEmits(["save-page-review", "delete-node"]);
 const { createMessage } = useMessage();
 
 const previewIndex = ref(-1);
+const previewThumbnailRefs = ref([]);
 const editorState = ref("view");
 const editMode = computed(() => editorState.value !== "view");
 const saving = computed(() => editorState.value === "saving");
@@ -205,7 +206,7 @@ function imageItemsForPage(page, kind) {
 }
 
 function openImagePreview(image) {
-  previewIndex.value = previewImages.value.findIndex((item) => item === image);
+  selectImagePreview(previewImages.value.findIndex((item) => item === image));
 }
 
 function closeImagePreview() {
@@ -215,7 +216,19 @@ function closeImagePreview() {
 function moveImagePreview(direction) {
   const count = previewImages.value.length;
   if (count < 2) return;
-  previewIndex.value = (previewIndex.value + direction + count) % count;
+  selectImagePreview((previewIndex.value + direction + count) % count);
+}
+
+function selectImagePreview(index) {
+  if (index < 0 || index >= previewImages.value.length) return;
+  previewIndex.value = index;
+  nextTick(() => {
+    previewThumbnailRefs.value[index]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center"
+    });
+  });
 }
 
 function handleNewImages(event) {
@@ -670,6 +683,26 @@ async function saveEdit() {
           <div class="image-preview-caption">
             <strong>{{ previewImage.title }}</strong>
             <span>{{ previewImage.kind }} · {{ previewIndex + 1 }}/{{ previewImages.length }}</span>
+          </div>
+          <div v-if="previewImages.length > 1" class="image-preview-thumbnails" aria-label="全部截图">
+            <button
+              v-for="(image, imageIndex) in previewImages"
+              :key="`${image.rawUrl || image.title}-preview-${imageIndex}`"
+              :ref="(element) => { if (element) previewThumbnailRefs[imageIndex] = element; }"
+              type="button"
+              class="image-preview-thumbnail"
+              :class="{ active: imageIndex === previewIndex }"
+              :aria-label="`查看第 ${imageIndex + 1} 张截图`"
+              :aria-current="imageIndex === previewIndex ? 'true' : undefined"
+              @click="selectImagePreview(imageIndex)"
+            >
+              <SmartImage
+                :candidates="image.candidates"
+                :title="image.title"
+                :kind="image.kind"
+              />
+              <span>{{ imageIndex + 1 }}</span>
+            </button>
           </div>
         </div>
       </div>
