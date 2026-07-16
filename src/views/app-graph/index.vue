@@ -1,7 +1,7 @@
 <script setup>
 import Icon from '@/components/Icon/Icon.vue';
 import { useMessage } from '@/hooks/web/useMessage';
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   Segmented as ASegmented,
   Select as ASelect,
@@ -11,6 +11,8 @@ import {
 import GraphButton from "./components/shared/GraphButton.vue";
 import GraphCanvas from "./components/GraphCanvas.vue";
 import InspectorPanel from "./components/InspectorPanel.vue";
+import TestCaseNav from "./components/TestCaseNav.vue";
+import TestCasePanel from "./components/TestCasePanel.vue";
 import TreeNav from "./components/TreeNav.vue";
 import "./style.css";
 import {
@@ -20,6 +22,7 @@ import {
   mergeFloatingPageIntoGraph,
   normalizeBackendGraph
 } from "./data/graph.js";
+import { createMockPerformanceResult, resolveTestCases } from "./data/testCases.js";
 import {
   queryAppGraph,
   queryAppList,
@@ -31,13 +34,30 @@ import {
   requestMoveNode,
   requestSavePageReview
 } from "./info.api";
-import { layoutModes, toolActions } from "./info.data";
+import {
+  getOfficialFunctionCatalog,
+  getTestCaseCatalog,
+  layoutModes,
+  toolActions,
+  workModes
+} from "./info.data";
 
 const appName = ref("");
 const appList = ref([]);
 const appListLoading = ref(false);
 const selected = ref({ type: "node", id: "" });
 const keyword = ref("");
+const aiGraphHighlighted = ref(false);
+const selectedOfficialFunction = ref(null);
+const workMode = ref("graph");
+const selectedCaseId = ref("");
+const caseExecution = ref({
+  caseId: "",
+  status: "idle",
+  currentStep: 0,
+  result: null
+});
+let caseExecutionTimer = null;
 const layoutMode = ref("horizontal");
 const toolAction = ref("");
 const graphRef = ref(null);
@@ -58,6 +78,14 @@ const selectedPayload = computed(() => {
   }
   return graph.value.pageMap.get(selected.value.id) || null;
 });
+const officialFunctionCatalog = computed(() => getOfficialFunctionCatalog(appName.value));
+const highlightedFunctionPageIds = computed(() => selectedOfficialFunction.value?.pageIds || []);
+const resolvedTestCases = computed(() => resolveTestCases(graph.value, getTestCaseCatalog(appName.value)));
+const activeTestCase = computed(() => (
+  resolvedTestCases.value.find((item) => item.case_id === selectedCaseId.value)
+  || resolvedTestCases.value[0]
+  || null
+));
 
 async function loadInitialApps() {
   appListLoading.value = true;
@@ -88,6 +116,10 @@ async function loadGraph() {
     const payload = await queryAppGraph(appName.value.trim());
     const normalized = normalizeBackendGraph(payload);
     graph.value = normalized;
+    aiGraphHighlighted.value = false;
+    selectedOfficialFunction.value = null;
+    selectedCaseId.value = "";
+    stopCaseExecution();
     floatingAiState.value = {};
     selected.value = { type: "node", id: normalized.roots[0] || "" };
     layoutRevision.value += 1;
@@ -107,6 +139,60 @@ function selectNode(nodeId) {
 
 function selectEdge(edgeId) {
   selected.value = { type: "edge", id: edgeId };
+}
+
+function highlightOfficialFunction(payload) {
+  selectedOfficialFunction.value = payload;
+  if (payload?.pageIds?.length) {
+    selected.value = { type: "node", id: payload.pageIds[0] };
+  }
+}
+
+function selectTestCase(caseId) {
+  selectedCaseId.value = caseId;
+  const testCase = resolvedTestCases.value.find((item) => item.case_id === caseId);
+  if (testCase?.startPage) selected.value = { type: "node", id: testCase.startPage.nodeId };
+}
+
+function runTestCase(caseId) {
+  const testCase = resolvedTestCases.value.find((item) => item.case_id === caseId);
+  if (!testCase?.resolved) return;
+  stopCaseExecution();
+  selectedCaseId.value = caseId;
+  caseExecution.value = {
+    caseId,
+    status: "running",
+    currentStep: 1,
+    result: null
+  };
+  caseExecutionTimer = window.setInterval(() => {
+    if (caseExecution.value.currentStep >= testCase.steps.length) {
+      window.clearInterval(caseExecutionTimer);
+      caseExecutionTimer = null;
+      caseExecution.value = {
+        caseId,
+        status: "completed",
+        currentStep: testCase.steps.length + 1,
+        result: createMockPerformanceResult(testCase)
+      };
+      return;
+    }
+    caseExecution.value = {
+      ...caseExecution.value,
+      currentStep: caseExecution.value.currentStep + 1
+    };
+  }, 1100);
+}
+
+function stopCaseExecution() {
+  if (caseExecutionTimer) window.clearInterval(caseExecutionTimer);
+  caseExecutionTimer = null;
+  if (caseExecution.value.status === "running") {
+    caseExecution.value = {
+      ...caseExecution.value,
+      status: "stopped"
+    };
+  }
 }
 
 function filterAppOption(input, option) {
@@ -367,12 +453,31 @@ async function savePageReview(submission) {
   }
 }
 onMounted(loadInitialApps);
+onBeforeUnmount(stopCaseExecution);
+
+watch(workMode, (value) => {
+  if (value === "cases") {
+    aiGraphHighlighted.value = false;
+    selectedOfficialFunction.value = null;
+    if (!selectedCaseId.value && resolvedTestCases.value.length) {
+      selectTestCase(resolvedTestCases.value[0].case_id);
+    }
+    return;
+  }
+  stopCaseExecution();
+});
 </script>
 
 <template>
   <div class="app-shell">
     <header class="topbar">
         <div class="topbar-actions">
+          <a-segmented
+            v-model:value="workMode"
+            class="work-mode-switch"
+            :options="workModes"
+            aria-label="工作模式切换"
+          />
           <div class="app-query">
             <a-select
               v-model:value="appName"
@@ -418,19 +523,31 @@ onMounted(loadInitialApps);
         </div>
       </header>
     <TreeNav
+      v-if="workMode === 'graph'"
       v-model:keyword="keyword"
+      v-model:ai-graph-highlighted="aiGraphHighlighted"
       :graph="graph"
+      :function-catalog="officialFunctionCatalog"
       :floating-ai-state="floatingAiState"
       :creating-orphan="creatingOrphan"
       :loading="loading"
       :structure-saving="Boolean(movingNodeId)"
       :selected="selected"
+      :selected-function-id="selectedOfficialFunction?.functionId || ''"
       @create-floating-node="createFloatingNode"
       @explore-floating-node="exploreFloatingNode"
       @manual-merge-floating-node="manualMergeFloatingNode"
       @merge-floating-node="mergeFloatingNode"
       @move-tree-node="moveTreeNode"
+      @highlight-function="highlightOfficialFunction"
       @select-node="selectNode"
+    />
+    <TestCaseNav
+      v-else
+      :cases="resolvedTestCases"
+      :execution="caseExecution"
+      :selected-case-id="activeTestCase?.case_id || ''"
+      @select-case="selectTestCase"
     />
 
     <main class="workspace">
@@ -448,19 +565,33 @@ onMounted(loadInitialApps);
         :layout-mode="layoutMode"
         :layout-revision="layoutRevision"
         :keyword="keyword"
+        :ai-graph-highlighted="aiGraphHighlighted"
+        :function-highlight-active="Boolean(selectedOfficialFunction)"
+        :function-highlight-label="selectedOfficialFunction?.functionName || ''"
+        :highlighted-page-ids="highlightedFunctionPageIds"
         :selected="selected"
+        :test-case="workMode === 'cases' ? activeTestCase : null"
+        :case-execution="caseExecution"
         @select-node="selectNode"
         @select-edge="selectEdge"
       />
     </main>
 
     <InspectorPanel
+      v-if="workMode === 'graph'"
       :deleting="Boolean(deletingNodeId)"
       :graph="graph"
       :selected="selected"
       :payload="selectedPayload"
       @save-page-review="savePageReview"
       @delete-node="deleteNode"
+    />
+    <TestCasePanel
+      v-else
+      :execution="caseExecution"
+      :test-case="activeTestCase"
+      @run-case="runTestCase"
+      @stop-case="stopCaseExecution"
     />
   </div>
 </template>

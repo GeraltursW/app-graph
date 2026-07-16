@@ -1,8 +1,9 @@
 <script setup>
 import Icon from '@/components/Icon/Icon.vue';
 import GraphButton from "./shared/GraphButton.vue";
-import { Modal as AModal } from "ant-design-vue";
+import { Modal as AModal, Segmented as ASegmented } from "ant-design-vue";
 import { computed, ref, watch } from "vue";
+import OfficialFunctionTree from "./OfficialFunctionTree.vue";
 import TreeItem from "./TreeItem.vue";
 import { Badge, Input, ScrollArea } from "./ui";
 import { getOutgoingEdges } from "../data/graph.js";
@@ -13,6 +14,18 @@ const props = defineProps({
     required: true
   },
   keyword: {
+    type: String,
+    default: ""
+  },
+  aiGraphHighlighted: {
+    type: Boolean,
+    default: false
+  },
+  functionCatalog: {
+    type: Object,
+    default: () => ({ source: "", version: "", functions: [] })
+  },
+  selectedFunctionId: {
     type: String,
     default: ""
   },
@@ -40,6 +53,8 @@ const props = defineProps({
 
 const emit = defineEmits([
   "update:keyword",
+  "update:ai-graph-highlighted",
+  "highlight-function",
   "create-floating-node",
   "select-node",
   "explore-floating-node",
@@ -53,6 +68,7 @@ const draggingFloatingId = ref("");
 const draggingTreeId = ref("");
 const dragMode = ref(false);
 const treeEditMode = ref(false);
+const navigationMode = ref("pages");
 const createDialogOpen = ref(false);
 const floatingUrlDraft = ref("");
 const createUrlError = ref("");
@@ -60,6 +76,7 @@ const createUrlError = ref("");
 const tree = computed(() => props.graph.roots.map((rootId) => buildNode(rootId)));
 const floatingTree = computed(() => props.graph.floatingRoots.map((rootId) => buildNode(rootId)));
 const mainTreeNodeCount = computed(() => props.graph.pages.filter((page) => !page.isFloating).length);
+const aiNodeCount = computed(() => props.graph.pages.filter((page) => page.ai_recursive).length);
 const searchResults = computed(() => {
   const normalized = props.keyword.trim().toLowerCase();
   if (!normalized) return [];
@@ -74,7 +91,13 @@ watch(() => props.graph, () => {
   draggingTreeId.value = "";
   dragMode.value = false;
   treeEditMode.value = false;
+  navigationMode.value = "pages";
 });
+
+function changeNavigationMode(value) {
+  navigationMode.value = value;
+  if (value === "pages" && props.selectedFunctionId) emit("highlight-function", null);
+}
 
 function buildNode(nodeId) {
   const page = props.graph.pageMap.get(nodeId);
@@ -132,8 +155,9 @@ function toggleTreeEditMode() {
 
 function isMuted(node) {
   const normalized = props.keyword.trim().toLowerCase();
-  if (!normalized) return false;
-  return !searchableText(node.page).includes(normalized);
+  const missesSearch = Boolean(normalized) && !searchableText(node.page).includes(normalized);
+  const missesAiGraph = props.aiGraphHighlighted && !node.page?.ai_recursive;
+  return missesSearch || missesAiGraph;
 }
 
 function searchableText(page) {
@@ -215,8 +239,31 @@ function handleMoveTreeNode(payload) {
 
     <section class="sidebar-section main-tree-section" :class="{ 'drop-mode': dragMode || treeEditMode }">
       <div class="sidebar-section-head">
-        <strong>主图谱树</strong>
-        <div class="floating-head-actions">
+        <a-segmented
+          class="navigation-mode-switch"
+          :value="navigationMode"
+          :options="[
+            { label: '页面树', value: 'pages' },
+            { label: '官方功能', value: 'functions' }
+          ]"
+          size="small"
+          @change="changeNavigationMode"
+        />
+        <div v-if="navigationMode === 'pages'" class="floating-head-actions">
+          <GraphButton
+            class="ai-graph-toggle"
+            :type="aiGraphHighlighted ? 'primary' : 'default'"
+            html-type="button"
+            :disabled="!aiNodeCount && !aiGraphHighlighted"
+            :title="aiGraphHighlighted ? '恢复显示全部图谱节点' : '仅高亮 AI 探索节点'"
+            @click="emit('update:ai-graph-highlighted', !aiGraphHighlighted)"
+          >
+            <template #icon>
+              <Icon icon="ant-design:robot-outlined" :size="14" />
+            </template>
+            AI 图
+            <span class="ai-graph-count">{{ aiNodeCount }}</span>
+          </GraphButton>
           <GraphButton
             class="drag-mode-toggle"
             :type="treeEditMode ? 'primary' : 'default'"
@@ -231,9 +278,17 @@ function handleMoveTreeNode(payload) {
           </GraphButton>
           <Badge variant="secondary">{{ mainTreeNodeCount }}</Badge>
         </div>
+        <Badge v-else variant="secondary">{{ functionCatalog.functions.length }}</Badge>
       </div>
       <ScrollArea class="tree-scroll module-scroll">
         <div v-if="loading" class="empty-state">图谱加载中...</div>
+        <OfficialFunctionTree
+          v-else-if="navigationMode === 'functions'"
+          :catalog="functionCatalog"
+          :graph="graph"
+          :selected-function-id="selectedFunctionId"
+          @highlight-function="emit('highlight-function', $event)"
+        />
         <div v-else-if="!tree.length" class="empty-state">暂无主树数据</div>
         <div v-else>
           <p v-if="treeEditMode" class="manual-merge-hint active">

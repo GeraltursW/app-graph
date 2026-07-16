@@ -16,6 +16,15 @@ const props = defineProps({
   graph: { type: Object, required: true },
   loading: { type: Boolean, default: false },
   keyword: { type: String, default: '' },
+  aiGraphHighlighted: { type: Boolean, default: false },
+  functionHighlightActive: { type: Boolean, default: false },
+  functionHighlightLabel: { type: String, default: '' },
+  highlightedPageIds: { type: Array, default: () => [] },
+  testCase: { type: Object, default: null },
+  caseExecution: {
+    type: Object,
+    default: () => ({ caseId: "", status: "idle", currentStep: 0, result: null }),
+  },
   selected: { type: Object, required: true },
   layoutMode: { type: String, default: 'horizontal' },
   layoutRevision: { type: Number, default: 0 },
@@ -44,6 +53,13 @@ const floatingTone = { accent: '#b7791f', stroke: '#e7bd63', fill: '#fff0c9', su
 
 const normalizedKeyword = computed(() => props.keyword.trim().toLowerCase());
 const hoveredPage = ref(null);
+const caseMode = computed(() => Boolean(props.testCase));
+const caseEdgeStepMap = computed(() => new Map(
+  (props.testCase?.edgeSteps || []).map((edge) => [edge.id, edge.step_no]),
+));
+const caseNodeStepMap = computed(() => new Map(
+  (props.testCase?.pageIds || []).map((nodeId, index) => [nodeId, index + 1]),
+));
 const rootIds = computed(() => [...props.graph.roots, ...props.graph.floatingRoots]);
 const previewCandidates = computed(() => {
   const image = normalizeImageUrls(previewPage.value || {})[0];
@@ -107,6 +123,19 @@ function prepareGraphVisibility() {
     : new Set();
 }
 
+function prepareCaseVisibility() {
+  if (!props.testCase?.pageIds?.length) return;
+  const next = new Set(collapsed.value);
+  props.testCase.pageIds.forEach((nodeId) => {
+    let cursor = props.graph.pageMap.get(nodeId);
+    while (cursor) {
+      next.delete(cursor.nodeId);
+      cursor = cursor.parentId ? props.graph.pageMap.get(cursor.parentId) : null;
+    }
+  });
+  collapsed.value = next;
+}
+
 function getNodeSize() {
   return [196, 258];
 }
@@ -150,6 +179,8 @@ function openPreview(page) {
 function toG6Data() {
   const visibleIds = getVisibleIds();
   const keyword = normalizedKeyword.value;
+  const functionPageIds = new Set(props.highlightedPageIds);
+  const testCasePageIds = new Set(props.testCase?.pageIds || []);
   const [width, height] = getNodeSize();
   const visiblePages = props.graph.pages.filter((page) => visibleIds.has(page.nodeId));
   const clusterCounts = visiblePages.reduce((counts, page) => {
@@ -164,6 +195,9 @@ function toG6Data() {
         const firstImage = normalizeImageUrls(page)[0];
         const clusterKey = getClusterKey(page);
         const tone = getClusterTone(clusterKey);
+        const caseStep = caseNodeStepMap.value.get(page.nodeId) || 0;
+        const caseRole = getCaseNodeRole(page.nodeId, caseStep);
+        const caseActive = getActiveCaseNodeId() === page.nodeId;
         return {
           id: page.nodeId,
           combo: clusterKey === 'root' ? undefined : `cluster:${clusterKey}`,
@@ -179,10 +213,18 @@ function toG6Data() {
             collapsed: collapsed.value.has(page.nodeId),
             floating: page.isFloating,
             compact: false,
-            accentColor: tone.accent,
-            badgeText: page.ai_recursive ? 'AI 推断' : page.isFloating ? '游离' : '',
+            accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
+            badgeText: caseActive
+              ? '执行中'
+              : caseRole || (page.ai_recursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
             aiRecursive: page.ai_recursive,
-            matched: !keyword || searchableText(page).includes(keyword),
+            caseRole,
+            caseStep,
+            caseActive,
+            matched: (!keyword || searchableText(page).includes(keyword))
+              && (!props.aiGraphHighlighted || page.ai_recursive)
+              && (!props.functionHighlightActive || functionPageIds.has(page.nodeId))
+              && (!caseMode.value || testCasePageIds.has(page.nodeId)),
             onPreview: () => openPreview(page),
             onToggle: () => toggleCollapse(page.nodeId),
           },
@@ -195,6 +237,11 @@ function toG6Data() {
         source: edge.from,
         target: edge.to,
         data: edge,
+        style: {
+          caseStep: caseEdgeStepMap.value.get(edge.id) || 0,
+          caseActive: caseEdgeStepMap.value.get(edge.id) === props.caseExecution.currentStep
+            && props.caseExecution.status === 'running',
+        },
       })),
     combos: [...clusterCounts.entries()].map(([clusterKey, count]) => ({
       id: `cluster:${clusterKey}`,
@@ -205,6 +252,21 @@ function toG6Data() {
       },
     })),
   };
+}
+
+function getCaseNodeRole(nodeId, step) {
+  if (!props.testCase || !step) return '';
+  if (props.testCase.case_type === 'scenario') return '场景';
+  if (nodeId === props.testCase.startPage?.nodeId) return '起点';
+  if (nodeId === props.testCase.targetPage?.nodeId) return '采集';
+  return `步骤${step}`;
+}
+
+function getActiveCaseNodeId() {
+  if (!props.testCase || props.caseExecution.caseId !== props.testCase.case_id) return '';
+  if (props.caseExecution.status !== 'running') return '';
+  const current = props.testCase.steps?.[props.caseExecution.currentStep - 1];
+  return current?.page_id || '';
 }
 
 function getLayout() {
@@ -257,10 +319,16 @@ function createGraph() {
       type: nodeType,
       style: {
         fill: (datum) => getClusterTone(datum.data.clusterKey).surface,
-        stroke: (datum) => datum.data.page.ai_recursive
-          ? '#eab308'
-          : datum.data.page.isFloating ? '#f59e0b' : '#b9c9dc',
-        lineWidth: (datum) => datum.data.page.ai_recursive || datum.data.page.isFloating ? 2 : 1.5,
+        stroke: (datum) => datum.style.caseActive
+          ? '#16a34a'
+          : datum.style.caseRole
+            ? '#2563eb'
+            : datum.data.page.ai_recursive
+              ? '#eab308'
+              : datum.data.page.isFloating ? '#f59e0b' : '#b9c9dc',
+        lineWidth: (datum) => datum.style.caseActive
+          ? 4
+          : datum.style.caseRole || datum.data.page.ai_recursive || datum.data.page.isFloating ? 2 : 1.5,
         radius: 6,
         shadowColor: 'rgba(40, 79, 128, 0.15)',
         shadowBlur: 12,
@@ -300,13 +368,16 @@ function createGraph() {
     edge: {
       type: (datum) => props.layoutMode === 'radial' ? 'line' : 'polyline',
       style: {
-        stroke: '#6d8fba',
-        lineWidth: 1.8,
+        stroke: (datum) => datum.style.caseActive
+          ? '#16a34a'
+          : datum.style.caseStep ? '#2563eb' : '#6d8fba',
+        strokeOpacity: (datum) => caseMode.value && !datum.style.caseStep ? 0.16 : 1,
+        lineWidth: (datum) => datum.style.caseActive ? 4 : datum.style.caseStep ? 3 : 1.8,
         endArrow: true,
         endArrowSize: 8,
-        labelText: (datum) => shouldShowEdgeControl(datum.data)
-          ? formatEdgeControlLabel(datum.data)
-          : '',
+        labelText: (datum) => datum.style.caseStep
+          ? `${String(datum.style.caseStep).padStart(2, '0')} ${formatEdgeControlLabel(datum.data)}`
+          : shouldShowEdgeControl(datum.data) ? formatEdgeControlLabel(datum.data) : '',
         labelPlacement: 0.68,
         labelAutoRotate: false,
         labelFill: '#ffffff',
@@ -315,6 +386,8 @@ function createGraph() {
         labelBackground: true,
         labelBackgroundFill: (datum) => {
           const sourcePage = props.graph.pageMap.get(datum.data.from);
+          if (datum.style.caseActive) return '#16a34a';
+          if (datum.style.caseStep) return '#2563eb';
           return getClusterTone(sourcePage ? getClusterKey(sourcePage) : 'root').accent;
         },
         labelBackgroundStroke: '#ffffff',
@@ -347,6 +420,7 @@ function createGraph() {
 
 async function performRender({ fit = false } = {}) {
   prepareGraphVisibility();
+  prepareCaseVisibility();
   createGraph();
   if (!graphInstance) return;
   const sequence = ++renderSequence;
@@ -468,9 +542,20 @@ watch(() => [props.layoutMode, props.layoutRevision, props.graph], () => {
   nextTick(() => renderGraph({ fit: true }));
 }, { deep: false });
 
-watch(() => props.keyword, () => {
+watch(() => [
+  props.keyword,
+  props.aiGraphHighlighted,
+  props.functionHighlightActive,
+  props.highlightedPageIds,
+  props.caseExecution.currentStep,
+  props.caseExecution.status,
+], () => {
   nextTick(() => renderGraph());
-});
+}, { deep: true });
+
+watch(() => props.testCase, () => {
+  nextTick(() => renderGraph({ fit: true }));
+}, { deep: true });
 
 watch(() => props.selected, () => {
   nextTick(queueSelectionSync);
@@ -496,6 +581,20 @@ onBeforeUnmount(() => {
       <div class="stat"><span>跳转</span><strong>{{ graph.edges.length }}</strong></div>
       <div class="stat"><span>游离</span><strong>{{ graph.floatingPages.length }}</strong></div>
       <div class="stat"><span>引擎</span><strong>G6</strong></div>
+    </div>
+    <div v-if="functionHighlightActive" class="canvas-function-filter">
+      <Icon icon="ant-design:apartment-outlined" :size="14" />
+      <span>官方功能</span>
+      <strong>{{ functionHighlightLabel }}</strong>
+      <em>{{ highlightedPageIds.length }} 个页面</em>
+    </div>
+    <div v-if="testCase" class="canvas-case-filter" :class="{ running: caseExecution.status === 'running' }">
+      <Icon :icon="testCase.case_type === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="14" />
+      <span>{{ testCase.case_type === 'path' ? '路径采集' : '场景性能' }}</span>
+      <strong>{{ testCase.case_name }}</strong>
+      <em v-if="caseExecution.caseId === testCase.case_id && caseExecution.status === 'running'">
+        步骤 {{ caseExecution.currentStep }}/{{ testCase.steps.length }}
+      </em>
     </div>
 
     <div ref="containerRef" class="g6-canvas" />
