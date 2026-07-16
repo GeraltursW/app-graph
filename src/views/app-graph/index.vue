@@ -25,6 +25,7 @@ import {
 import {
   createMockPerformanceResult,
   generateFullCoveragePathCases,
+  generateMockScenarioCases,
   resolveTestCases
 } from "./data/testCases.js";
 import {
@@ -87,6 +88,9 @@ const officialFunctionCatalog = computed(() => getOfficialFunctionCatalog(appNam
 const highlightedFunctionPageIds = computed(() => selectedOfficialFunction.value?.pageIds || []);
 const resolvedTestCases = computed(() => [
   ...generateFullCoveragePathCases(graph.value, { appName: appName.value }),
+  ...(appName.value === "QQ"
+    ? generateMockScenarioCases(graph.value, 80, { appName: appName.value })
+    : []),
   ...resolveTestCases(graph.value, [
     ...getTestCaseCatalog(appName.value).filter((item) => item.case_type === "scenario"),
     ...customScenarioCases.value

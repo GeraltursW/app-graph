@@ -36,6 +36,81 @@ export function generateFullCoveragePathCases(graph, options = {}) {
   return cases;
 }
 
+export function generateMockScenarioCases(graph, count = 80, options = {}) {
+  const pages = graph.pages.filter((page) => !page.isFloating && page.level > 1);
+  if (!pages.length || count <= 0) return [];
+  const operationFactories = [
+    (page) => ({
+      suffix: '连续滑动',
+      operations: [
+        { type: 'wait', label: '等待页面稳定', target: page.displayTitle, duration_ms: 1200, repeat: 1 },
+        { type: 'swipe', label: '连续向上浏览', target: '页面内容区', direction: 'up', duration_ms: 420, repeat: 5 },
+        { type: 'wait', label: '观察内容加载', target: page.displayTitle, duration_ms: 1600, repeat: 1 },
+      ],
+    }),
+    () => ({
+      suffix: '长按交互',
+      operations: [
+        { type: 'wait', label: '等待页面稳定', target: '当前页面', duration_ms: 1000, repeat: 1 },
+        { type: 'long_press', label: '长按核心内容', target: '核心内容区', duration_ms: 800, repeat: 2 },
+        { type: 'wait', label: '观察弹层反馈', target: '当前页面', duration_ms: 1400, repeat: 1 },
+      ],
+    }),
+    () => ({
+      suffix: '点击响应',
+      operations: [
+        { type: 'tap', label: '点击首个可交互控件', target: '首个主要控件', duration_ms: 200, repeat: 3 },
+        { type: 'wait', label: '等待状态刷新', target: '当前页面', duration_ms: 900, repeat: 1 },
+        { type: 'tap', label: '点击次要控件', target: '次要操作区', duration_ms: 200, repeat: 2 },
+      ],
+    }),
+    () => ({
+      suffix: '往返滚动',
+      operations: [
+        { type: 'swipe', label: '向上滚动', target: '页面内容区', direction: 'up', duration_ms: 380, repeat: 4 },
+        { type: 'wait', label: '中段停留', target: '当前页面', duration_ms: 1200, repeat: 1 },
+        { type: 'swipe', label: '向下回滚', target: '页面内容区', direction: 'down', duration_ms: 380, repeat: 3 },
+      ],
+    }),
+    () => ({
+      suffix: '混合压力',
+      operations: [
+        { type: 'swipe', label: '连续浏览内容', target: '页面内容区', direction: 'up', duration_ms: 400, repeat: 3 },
+        { type: 'long_press', label: '长按内容区域', target: '核心内容区', duration_ms: 700, repeat: 1 },
+        { type: 'tap', label: '点击操作入口', target: '主要操作区', duration_ms: 180, repeat: 3 },
+        { type: 'wait', label: '持续观察', target: '当前页面', duration_ms: 1800, repeat: 1 },
+      ],
+    }),
+  ];
+  const metricSets = [
+    ['FPS', 'Jank', 'CPU', '内存'],
+    ['CPU', '内存', '功耗', '温度'],
+    ['FPS', 'Jank', '功耗'],
+    ['CPU', 'FPS', '功耗', '温度'],
+  ];
+  const templates = Array.from({ length: count }, (_, index) => {
+    const page = pages[(index * 37 + Math.floor(index / pages.length)) % pages.length];
+    const operationSet = operationFactories[index % operationFactories.length](page);
+    return {
+      case_id: `demo-scenario-${String(index + 1).padStart(3, '0')}`,
+      case_name: `演示 ${String(index + 1).padStart(2, '0')} · ${page.displayTitle}${operationSet.suffix}`,
+      case_type: 'scenario',
+      source: 'demo_mock',
+      mock_index: index + 1,
+      app_name: options.appName || '',
+      description: `Mock 过程采集用例，验证 ${page.displayTitle} 的${operationSet.suffix}性能。`,
+      start_page_id: page.nodeId,
+      operations: operationSet.operations,
+      collection: {
+        trigger: 'case_lifecycle',
+        duration_seconds: 18 + (index % 7) * 4,
+        metrics: metricSets[index % metricSets.length],
+      },
+    };
+  });
+  return resolveTestCases(graph, templates);
+}
+
 function createPathCase(graph, pages, edges, collection, appName = '') {
   const targetPage = pages.at(-1);
   const pathFingerprint = hashPath([
@@ -196,14 +271,30 @@ export function createMockPerformanceResult(testCase) {
       ],
     };
   }
+  const seed = stableSeed(testCase.case_id || testCase.case_name || 'scenario');
+  const score = 68 + (seed % 27);
+  const fps = (48 + (seed % 115) / 10).toFixed(1);
+  const jank = (2.1 + (seed % 58) / 10).toFixed(1);
+  const cpu = (24 + (seed % 190) / 10).toFixed(1);
+  const power = (0.78 + (seed % 81) / 100).toFixed(2);
   return {
-    score: 72,
-    summary: '连续滑动阶段出现帧率下降，第 4 个操作功耗峰值明显。',
+    score,
+    summary: score >= 85
+      ? '操作过程整体稳定，未发现明显性能异常。'
+      : score >= 75
+        ? '操作过程中存在轻微波动，建议关注峰值步骤。'
+        : '连续交互阶段存在性能下降，建议检查高负载操作。',
     metrics: [
-      { label: '平均 FPS', value: '51.8', tone: 'warning' },
-      { label: 'Jank', value: '6.2%', tone: 'warning' },
-      { label: '平均 CPU', value: '37.4%', tone: 'normal' },
-      { label: '峰值功耗', value: '1.42 W', tone: 'danger' },
+      { label: '平均 FPS', value: fps, tone: Number(fps) >= 56 ? 'good' : 'warning' },
+      { label: 'Jank', value: `${jank}%`, tone: Number(jank) > 6 ? 'warning' : 'normal' },
+      { label: '平均 CPU', value: `${cpu}%`, tone: Number(cpu) > 38 ? 'warning' : 'normal' },
+      { label: '峰值功耗', value: `${power} W`, tone: Number(power) > 1.35 ? 'danger' : 'normal' },
     ],
   };
+}
+
+function stableSeed(value) {
+  return [...String(value)].reduce((seed, character) => (
+    (Math.imul(seed, 31) + character.charCodeAt(0)) >>> 0
+  ), 17);
 }

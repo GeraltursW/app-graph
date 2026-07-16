@@ -161,27 +161,7 @@ export function getOfficialFunctionCatalog(appName: string) {
 }
 
 export const testCaseCatalogs = {
-  QQ: [
-    {
-      case_id: 'qq-scenario-video-scroll',
-      case_name: '短视频连续滑动性能',
-      case_type: 'scenario',
-      description: '从短视频推荐页开始执行连续滑动、停留和长按操作，记录全过程性能变化。',
-      start_page_title: '视频推荐 01',
-      operations: [
-        { type: 'wait', label: '等待页面稳定', duration_ms: 2000 },
-        { type: 'swipe', label: '向上滑动', direction: 'up', repeat: 5, duration_ms: 420 },
-        { type: 'wait', label: '内容停留', duration_ms: 1800 },
-        { type: 'long_press', label: '长按视频内容', duration_ms: 800 },
-        { type: 'swipe', label: '滑动评论区域', direction: 'up', repeat: 3, duration_ms: 360 },
-      ],
-      collection: {
-        trigger: 'case_lifecycle',
-        duration_seconds: 24,
-        metrics: ['FPS', 'Jank', 'CPU', '内存', '功耗'],
-      },
-    },
-  ],
+  QQ: [],
 };
 
 export function getTestCaseCatalog(appName: string) {

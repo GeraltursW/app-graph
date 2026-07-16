@@ -37,7 +37,7 @@ function operationIcon(step) {
         <h2>{{ testCase?.case_name || '请选择用例' }}</h2>
       </div>
       <Badge v-if="testCase" variant="secondary">
-        {{ testCase.case_type === 'path' ? '全量路径' : testCase.source === 'user_configured' ? '用户配置' : '场景模板' }}
+        {{ testCase.case_type === 'path' ? '全量路径' : testCase.source === 'user_configured' ? '用户配置' : testCase.source === 'demo_mock' ? '演示 Mock' : '场景模板' }}
       </Badge>
     </div>
 
