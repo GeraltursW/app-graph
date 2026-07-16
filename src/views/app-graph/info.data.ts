@@ -163,18 +163,6 @@ export function getOfficialFunctionCatalog(appName: string) {
 export const testCaseCatalogs = {
   QQ: [
     {
-      case_id: 'qq-path-chat-performance',
-      case_name: '进入群聊并采集性能',
-      case_type: 'path',
-      description: '从 QQ 首页沿已确认控件路径进入群聊页面，在目标页面稳定后采集性能指标。',
-      path_titles: ['QQ 首页', '消息中心', '会话列表 01', '聊天记录 05', '群聊窗口 21'],
-      collection: {
-        trigger: 'target_page_ready',
-        duration_seconds: 30,
-        metrics: ['CPU', '内存', 'FPS', '功耗', '温度'],
-      },
-    },
-    {
       case_id: 'qq-scenario-video-scroll',
       case_name: '短视频连续滑动性能',
       case_type: 'scenario',

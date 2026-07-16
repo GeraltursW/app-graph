@@ -24,6 +24,7 @@ function operationIcon(step) {
     swipe: 'ant-design:swap-outlined',
     long_press: 'ant-design:clock-circle-outlined',
     wait: 'ant-design:hourglass-outlined',
+    tap: 'ant-design:aim-outlined',
   }[step.type] || 'ant-design:play-circle-outlined';
 }
 </script>
@@ -36,7 +37,7 @@ function operationIcon(step) {
         <h2>{{ testCase?.case_name || '请选择用例' }}</h2>
       </div>
       <Badge v-if="testCase" variant="secondary">
-        {{ testCase.case_type === 'path' ? '路径采集' : '场景性能' }}
+        {{ testCase.case_type === 'path' ? '全量路径' : testCase.source === 'user_configured' ? '用户配置' : '场景模板' }}
       </Badge>
     </div>
 
@@ -89,8 +90,9 @@ function operationIcon(step) {
               <span class="case-step-icon"><Icon :icon="operationIcon(step)" :size="15" /></span>
               <span class="case-step-copy">
                 <strong>{{ step.title }}</strong>
-                <em v-if="step.type === 'swipe'">{{ step.direction === 'up' ? '向上' : step.direction }} · 重复 {{ step.repeat || 1 }} 次</em>
-                <em v-else-if="step.type === 'long_press'">持续 {{ step.duration_ms }} ms</em>
+                <em v-if="step.type === 'swipe'">{{ step.target || '页面内容区' }} · {{ step.direction === 'up' ? '向上' : step.direction }} · 重复 {{ step.repeat || 1 }} 次</em>
+                <em v-else-if="step.type === 'long_press'">{{ step.target || '目标区域' }} · 持续 {{ step.duration_ms }} ms</em>
+                <em v-else-if="step.type === 'tap'">点击 {{ step.target || '目标控件' }} · 重复 {{ step.repeat || 1 }} 次</em>
                 <em v-else-if="step.type === 'wait'">等待 {{ step.duration_ms }} ms</em>
                 <em v-else-if="step.type === 'collect'">在目标页面记录全部性能指标</em>
                 <em v-else>校验目标页面后继续执行</em>

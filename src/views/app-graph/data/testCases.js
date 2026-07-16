@@ -6,6 +6,94 @@ export function resolveTestCases(graph, templates = []) {
   ));
 }
 
+export function generateFullCoveragePathCases(graph, options = {}) {
+  const collection = options.collection || {
+    trigger: 'target_page_ready',
+    duration_seconds: 30,
+    metrics: ['CPU', '内存', 'FPS', '功耗', '温度'],
+  };
+  const cases = [];
+  const visiting = new Set();
+
+  function visit(nodeId, pages = [], edges = []) {
+    if (visiting.has(nodeId)) return;
+    const page = graph.pageMap.get(nodeId);
+    if (!page || page.isFloating) return;
+    visiting.add(nodeId);
+
+    const nextPages = [...pages, page];
+    const outgoing = (graph.childrenMap.get(nodeId) || [])
+      .filter((edge) => !graph.pageMap.get(edge.to)?.isFloating);
+    if (!outgoing.length) {
+      cases.push(createPathCase(graph, nextPages, edges, collection, options.appName));
+    } else {
+      outgoing.forEach((edge) => visit(edge.to, nextPages, [...edges, edge]));
+    }
+    visiting.delete(nodeId);
+  }
+
+  graph.roots.forEach((rootId) => visit(rootId));
+  return cases;
+}
+
+function createPathCase(graph, pages, edges, collection, appName = '') {
+  const targetPage = pages.at(-1);
+  const pathFingerprint = hashPath([
+    ...pages.map((page) => page.pageId || page.nodeId),
+    ...edges.map((edge) => edge.id),
+  ].join('|'));
+  const edgeSteps = edges.map((edge, index) => ({
+    ...edge,
+    step_no: index + 1,
+    action_label: edge.widget_description || edge.label || '进入',
+    expected_page_id: graph.pageMap.get(edge.to)?.pageId || '',
+    expected_page_title: graph.pageMap.get(edge.to)?.displayTitle || '',
+  }));
+  const stableTargetId = targetPage.pageId || targetPage.nodeId;
+  return {
+    case_id: `coverage-path-${stableTargetId}-${pathFingerprint}`,
+    path_fingerprint: pathFingerprint,
+    case_name: `${targetPage.displayTitle} · 终点采集`,
+    case_type: 'path',
+    source: 'graph_coverage',
+    app_name: appName,
+    description: `自动生成的全量覆盖路径，共 ${pages.length} 个页面，到达终点后采集性能。`,
+    resolved: true,
+    pages,
+    pageIds: pages.map((page) => page.nodeId),
+    edgeSteps,
+    edgeIds: edgeSteps.map((edge) => edge.id),
+    startPage: pages[0],
+    targetPage,
+    collection: { ...collection, metrics: [...collection.metrics] },
+    steps: [
+      ...edgeSteps.map((edge) => ({
+        step_no: edge.step_no,
+        type: 'navigate',
+        page_id: edge.from,
+        edge_id: edge.id,
+        title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.action_label}`,
+        expected_page_id: edge.to,
+      })),
+      {
+        step_no: edgeSteps.length + 1,
+        type: 'collect',
+        page_id: targetPage.nodeId,
+        title: `${targetPage.displayTitle} · 终点性能采集`,
+      },
+    ],
+  };
+}
+
+function hashPath(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function resolvePathCase(graph, template) {
   const pages = [];
   const edgeSteps = [];
@@ -59,7 +147,10 @@ function resolvePathCase(graph, template) {
 }
 
 function resolveScenarioCase(graph, template) {
-  const startPage = findPage(graph, template.start_page_title);
+  const startPage = findPage(
+    graph,
+    template.start_page_id || template.start_page_title,
+  );
   return {
     ...template,
     resolved: Boolean(startPage),
@@ -79,6 +170,10 @@ function resolveScenarioCase(graph, template) {
 }
 
 function findPage(graph, title) {
+  if (!title) return null;
+  if (graph.pageMap.has(title)) return graph.pageMap.get(title);
+  const byPageId = graph.pages.find((page) => page.pageId === title);
+  if (byPageId) return byPageId;
   const exact = graph.pages.find((page) => page.page_title === title || page.displayTitle === title);
   if (exact) return exact;
   const normalized = String(title || '').toLowerCase();

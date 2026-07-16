@@ -22,7 +22,11 @@ import {
   mergeFloatingPageIntoGraph,
   normalizeBackendGraph
 } from "./data/graph.js";
-import { createMockPerformanceResult, resolveTestCases } from "./data/testCases.js";
+import {
+  createMockPerformanceResult,
+  generateFullCoveragePathCases,
+  resolveTestCases
+} from "./data/testCases.js";
 import {
   queryAppGraph,
   queryAppList,
@@ -51,6 +55,7 @@ const aiGraphHighlighted = ref(false);
 const selectedOfficialFunction = ref(null);
 const workMode = ref("graph");
 const selectedCaseId = ref("");
+const customScenarioCases = ref([]);
 const caseExecution = ref({
   caseId: "",
   status: "idle",
@@ -80,7 +85,13 @@ const selectedPayload = computed(() => {
 });
 const officialFunctionCatalog = computed(() => getOfficialFunctionCatalog(appName.value));
 const highlightedFunctionPageIds = computed(() => selectedOfficialFunction.value?.pageIds || []);
-const resolvedTestCases = computed(() => resolveTestCases(graph.value, getTestCaseCatalog(appName.value)));
+const resolvedTestCases = computed(() => [
+  ...generateFullCoveragePathCases(graph.value, { appName: appName.value }),
+  ...resolveTestCases(graph.value, [
+    ...getTestCaseCatalog(appName.value).filter((item) => item.case_type === "scenario"),
+    ...customScenarioCases.value
+  ])
+]);
 const activeTestCase = computed(() => (
   resolvedTestCases.value.find((item) => item.case_id === selectedCaseId.value)
   || resolvedTestCases.value[0]
@@ -119,6 +130,7 @@ async function loadGraph() {
     aiGraphHighlighted.value = false;
     selectedOfficialFunction.value = null;
     selectedCaseId.value = "";
+    customScenarioCases.value = [];
     stopCaseExecution();
     floatingAiState.value = {};
     selected.value = { type: "node", id: normalized.roots[0] || "" };
@@ -152,6 +164,14 @@ function selectTestCase(caseId) {
   selectedCaseId.value = caseId;
   const testCase = resolvedTestCases.value.find((item) => item.case_id === caseId);
   if (testCase?.startPage) selected.value = { type: "node", id: testCase.startPage.nodeId };
+}
+
+function createScenarioCase(testCase) {
+  customScenarioCases.value = [...customScenarioCases.value, testCase];
+  selectedCaseId.value = testCase.case_id;
+  const startPage = graph.value.pageMap.get(testCase.start_page_id);
+  if (startPage) selected.value = { type: "node", id: startPage.nodeId };
+  createMessage.success("过程采集用例已创建");
 }
 
 function runTestCase(caseId) {
@@ -546,7 +566,9 @@ watch(workMode, (value) => {
       v-else
       :cases="resolvedTestCases"
       :execution="caseExecution"
+      :pages="graph.pages.filter((page) => !page.isFloating)"
       :selected-case-id="activeTestCase?.case_id || ''"
+      @create-scenario="createScenarioCase"
       @select-case="selectTestCase"
     />
 

@@ -1,17 +1,38 @@
 <script setup>
 import Icon from '@/components/Icon/Icon.vue';
-import { computed } from 'vue';
+import { Segmented as ASegmented } from 'ant-design-vue';
+import { computed, ref } from 'vue';
+import GraphButton from './shared/GraphButton.vue';
+import ScenarioCaseBuilder from './ScenarioCaseBuilder.vue';
 import { Badge, ScrollArea } from './ui';
 
 const props = defineProps({
   cases: { type: Array, default: () => [] },
+  pages: { type: Array, default: () => [] },
   selectedCaseId: { type: String, default: '' },
   execution: { type: Object, required: true },
 });
 
-const emit = defineEmits(['select-case']);
+const emit = defineEmits(['select-case', 'create-scenario']);
+const caseType = ref('path');
+const keyword = ref('');
+const builderOpen = ref(false);
 const pathCases = computed(() => props.cases.filter((item) => item.case_type === 'path'));
 const scenarioCases = computed(() => props.cases.filter((item) => item.case_type === 'scenario'));
+const visibleCases = computed(() => {
+  const normalized = keyword.value.trim().toLowerCase();
+  return props.cases.filter((item) => (
+    item.case_type === caseType.value
+    && (!normalized || `${item.case_name} ${item.description} ${item.targetPage?.displayTitle || ''}`
+      .toLowerCase().includes(normalized))
+  ));
+});
+
+function changeCaseType(value) {
+  caseType.value = value;
+  const first = props.cases.find((item) => item.case_type === value);
+  if (first) emit('select-case', first.case_id);
+}
 </script>
 
 <template>
@@ -29,10 +50,30 @@ const scenarioCases = computed(() => props.cases.filter((item) => item.case_type
       <div><Icon icon="ant-design:thunderbolt-outlined" :size="16" /><span>场景性能</span><strong>{{ scenarioCases.length }}</strong></div>
     </div>
 
+    <div class="case-list-tools">
+      <a-segmented
+        :value="caseType"
+        :options="[
+          { label: '全量路径', value: 'path' },
+          { label: '过程采集', value: 'scenario' }
+        ]"
+        size="small"
+        @change="changeCaseType"
+      />
+      <GraphButton v-if="caseType === 'scenario'" type="primary" html-type="button" @click="builderOpen = true">
+        <template #icon><Icon icon="ant-design:plus-outlined" :size="13" /></template>
+        新建
+      </GraphButton>
+      <label class="case-search">
+        <Icon icon="ant-design:search-outlined" :size="13" />
+        <input v-model="keyword" type="search" placeholder="搜索终点或用例" />
+      </label>
+    </div>
+
     <ScrollArea class="case-list-scroll">
       <div class="case-list">
         <button
-          v-for="item in cases"
+          v-for="item in visibleCases"
           :key="item.case_id"
           type="button"
           class="case-list-item"
@@ -53,7 +94,14 @@ const scenarioCases = computed(() => props.cases.filter((item) => item.case_type
             {{ execution.status === 'running' ? '执行中' : execution.status === 'completed' ? '已完成' : '' }}
           </span>
         </button>
+        <div v-if="!visibleCases.length" class="empty-state">当前分类暂无用例</div>
       </div>
     </ScrollArea>
+
+    <ScenarioCaseBuilder
+      v-model:open="builderOpen"
+      :pages="pages"
+      @create="emit('create-scenario', $event)"
+    />
   </aside>
 </template>
