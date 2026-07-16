@@ -11,6 +11,12 @@ npm install
 npm run dev
 ```
 
+领导演示建议使用强制纯前端模式：
+
+```bash
+npm run dev:mock
+```
+
 浏览器访问：
 
 ```text
@@ -22,6 +28,12 @@ http://127.0.0.1:5176
 ```bash
 npm run build
 npm run preview
+```
+
+离线 Mock 构建：
+
+```bash
+npm run build:mock
 ```
 
 ## 演示内容
@@ -37,6 +49,8 @@ npm run preview
 - 页面复核编辑、图片维护与全屏预览
 - 节点二次确认删除与后台数据同步
 - 请求 Loading、防重复提交和成功/失败提示
+- QQ 300 节点、292 条跳转边和 7 个 AI 游离节点
+- 220 条根到叶路径用例和 80 条过程采集用例
 
 ## 数据模式
 
@@ -46,7 +60,7 @@ npm run preview
 VITE_USE_MOCK=true
 ```
 
-Mock 数据仅保存在当前浏览器运行会话中，刷新页面后恢复为初始演示数据。
+Mock 包含内嵌 SVG 手机截图，不请求后端图片接口。编辑产生的数据仅保存在当前浏览器运行会话中，刷新页面后恢复为初始演示数据。
 
 如需连接真实 FastAPI 后端，创建 `.env.local`：
 
@@ -66,8 +80,7 @@ http://127.0.0.1:8000
 - Vue 3
 - Vite
 - Ant Design Vue
-- Vue Flow
-- D3 Force
+- AntV G6
 - Iconify
 - TypeScript
 

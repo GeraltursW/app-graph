@@ -30,6 +30,7 @@ enum Api {
 
 export function buildImageApiUrl(imageUrl: string) {
   if (!imageUrl) return '';
+  if (/^(data:|blob:|https?:\/\/)/i.test(imageUrl)) return imageUrl;
   return `${API_BASE_URL}/image/${encodeURIComponent(imageUrl)}`;
 }
 
