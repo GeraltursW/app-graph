@@ -395,7 +395,7 @@ const diagrams = [
 async function main() {
   fs.mkdirSync(outputDir, { recursive: true });
   for (const diagram of diagrams) {
-    const svg = buildSvg(diagram);
+    const svg = buildSvg(diagram).replace(/[ \t]+$/gm, '');
     const svgPath = path.join(outputDir, `${diagram.file}.svg`);
     const pngPath = path.join(outputDir, `${diagram.file}.png`);
     fs.writeFileSync(svgPath, svg, 'utf8');
