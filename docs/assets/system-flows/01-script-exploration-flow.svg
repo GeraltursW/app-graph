@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+    <defs>
+      <style>
+        text { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif; }
+      </style>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#173B73" flood-opacity="0.08"/>
+      </filter>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+        <path d="M 0 0 L 8 4 L 0 8 Z" fill="#176BFF"/>
+      </marker>
+      <linearGradient id="header" x1="0" x2="1">
+        <stop offset="0" stop-color="#0E5FE5"/>
+        <stop offset="0.72" stop-color="#1979F3"/>
+        <stop offset="1" stop-color="#0EA5C6"/>
+      </linearGradient>
+    </defs>
+    <rect width="1600" height="1000" fill="#F4F7FB"/>
+    <rect x="34" y="30" width="1532" height="134" rx="10" fill="url(#header)" filter="url(#shadow)"/>
+    <text x="70" y="78" font-size="15" font-weight="700" fill="#DDEBFF">APP GRAPH · LAYER 01</text>
+    <text x="70" y="122" font-size="34" font-weight="800" fill="#FFFFFF">手机探索脚本：从启动应用到生成可导入证据</text>
+    <text x="70" y="149" font-size="15" fill="#DDEBFF">每次动作从稳定根状态重放路径，避免重复点击同一控件，并保留同一页面的多条到达关系。</text>
+    
+    <rect x="1198" y="60" width="88" height="30" rx="6" fill="#E9F8F1"/>
+    <circle cx="1213" cy="75" r="4" fill="#159B68"/>
+    <text x="1225" y="81" font-size="14" font-weight="700" fill="#159B68">完成 8</text>
+  
+    
+    <rect x="1320" y="60" width="88" height="30" rx="6" fill="#FFF6DE"/>
+    <circle cx="1335" cy="75" r="4" fill="#C77A08"/>
+    <text x="1347" y="81" font-size="14" font-weight="700" fill="#C77A08">联调 3</text>
+  
+    
+    <rect x="1434" y="60" width="88" height="30" rx="6" fill="#FFF0F0"/>
+    <circle cx="1449" cy="75" r="4" fill="#D14B4B"/>
+    <text x="1461" y="81" font-size="14" font-weight="700" fill="#D14B4B">缺口 3</text>
+  
+    
+    <g>
+      <rect x="58" y="218" width="270" height="360" rx="8" fill="#FFFFFF" stroke="#D8E2F0" stroke-width="1.5"/>
+      <rect x="58" y="218" width="6" height="360" rx="3" fill="#159B68"/>
+      <circle cx="96" cy="260" r="20" fill="#EAF2FF"/>
+      <text x="96" y="267" text-anchor="middle" font-size="16" font-weight="800" fill="#176BFF">01</text>
+      
+    <rect x="212" y="245" width="74" height="30" rx="6" fill="#E9F8F1"/>
+    <circle cx="227" cy="260" r="4" fill="#159B68"/>
+    <text x="239" y="266" font-size="14" font-weight="700" fill="#159B68">已完成</text>
+  
+      <text x="82" y="314" font-size="22" fill="#17233C" font-weight="800" text-anchor="start"><tspan x="82" dy="0">选择探索模式</tspan></text>
+      <text x="82" y="342" font-size="14" fill="#64748B" font-weight="400" text-anchor="start"><tspan x="82" dy="0">明确本轮扫描范围</tspan></text>
+      <line x1="82" y1="366" x2="304" y2="366" stroke="#D8E2F0"/>
+      
+        <circle cx="87" cy="401" r="4" fill="#176BFF"/>
+        <text x="100" y="407" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="100" dy="0">initial：初始页面骨架</tspan></text>
+      
+        <circle cx="87" cy="444" r="4" fill="#0EA5C6"/>
+        <text x="100" y="450" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="100" dy="0">incremental：四层动作补充</tspan></text>
+      
+        <circle cx="87" cy="487" r="4" fill="#0EA5C6"/>
+        <text x="100" y="493" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="100" dy="0">single-node：指定节点探索</tspan></text>
+      
+        <circle cx="87" cy="530" r="4" fill="#0EA5C6"/>
+        <text x="100" y="536" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="100" dy="0">参数：步数、深度、输出目录</tspan></text>
+      
+      
+        <path d="M 336 398 H 353" stroke="#176BFF" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+      
+    </g>
+  
+    <g>
+      <rect x="360" y="218" width="270" height="360" rx="8" fill="#FFFFFF" stroke="#D8E2F0" stroke-width="1.5"/>
+      <rect x="360" y="218" width="6" height="360" rx="3" fill="#159B68"/>
+      <circle cx="398" cy="260" r="20" fill="#EAF2FF"/>
+      <text x="398" y="267" text-anchor="middle" font-size="16" font-weight="800" fill="#176BFF">02</text>
+      
+    <rect x="514" y="245" width="74" height="30" rx="6" fill="#E9F8F1"/>
+    <circle cx="529" cy="260" r="4" fill="#159B68"/>
+    <text x="541" y="266" font-size="14" font-weight="700" fill="#159B68">已完成</text>
+  
+      <text x="384" y="314" font-size="22" fill="#17233C" font-weight="800" text-anchor="start"><tspan x="384" dy="0">恢复与路径重放</tspan></text>
+      <text x="384" y="342" font-size="14" fill="#64748B" font-weight="400" text-anchor="start"><tspan x="384" dy="0">回到可重复的页面状态</tspan></text>
+      <line x1="384" y1="366" x2="606" y2="366" stroke="#D8E2F0"/>
+      
+        <circle cx="389" cy="401" r="4" fill="#176BFF"/>
+        <text x="402" y="407" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="402" dy="0">关闭并重新启动应用</tspan></text>
+      
+        <circle cx="389" cy="444" r="4" fill="#0EA5C6"/>
+        <text x="402" y="450" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="402" dy="0">重放最短已知动作路径</tspan></text>
+      
+        <circle cx="389" cy="487" r="4" fill="#0EA5C6"/>
+        <text x="402" y="493" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="402" dy="0">校验目标页面结构指纹</tspan></text>
+      
+        <circle cx="389" cy="530" r="4" fill="#0EA5C6"/>
+        <text x="402" y="536" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="402" dy="0">安全关闭启动广告或弹窗</tspan></text>
+      
+      
+        <path d="M 638 398 H 655" stroke="#176BFF" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+      
+    </g>
+  
+    <g>
+      <rect x="662" y="218" width="270" height="360" rx="8" fill="#FFFFFF" stroke="#D8E2F0" stroke-width="1.5"/>
+      <rect x="662" y="218" width="6" height="360" rx="3" fill="#159B68"/>
+      <circle cx="700" cy="260" r="20" fill="#EAF2FF"/>
+      <text x="700" y="267" text-anchor="middle" font-size="16" font-weight="800" fill="#176BFF">03</text>
+      
+    <rect x="816" y="245" width="74" height="30" rx="6" fill="#E9F8F1"/>
+    <circle cx="831" cy="260" r="4" fill="#159B68"/>
+    <text x="843" y="266" font-size="14" font-weight="700" fill="#159B68">已完成</text>
+  
+      <text x="686" y="314" font-size="22" fill="#17233C" font-weight="800" text-anchor="start"><tspan x="686" dy="0">AI 发现候选动作</tspan></text>
+      <text x="686" y="342" font-size="14" fill="#64748B" font-weight="400" text-anchor="start"><tspan x="686" dy="0">截图 + UI 树 + 上下文</tspan></text>
+      <line x1="686" y1="366" x2="908" y2="366" stroke="#D8E2F0"/>
+      
+        <circle cx="691" cy="401" r="4" fill="#176BFF"/>
+        <text x="704" y="407" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="704" dy="0">识别页面、控件与 OCR</tspan></text>
+      
+        <circle cx="691" cy="444" r="4" fill="#0EA5C6"/>
+        <text x="704" y="450" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="704" dy="0">输出四层 Action 候选</tspan></text>
+      
+        <circle cx="691" cy="487" r="4" fill="#0EA5C6"/>
+        <text x="704" y="493" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="704" dy="0">生成结构与状态指纹</tspan></text>
+      
+        <circle cx="691" cy="530" r="4" fill="#0EA5C6"/>
+        <text x="704" y="536" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="704" dy="0">风险过滤：只自动执行 safe</tspan></text>
+      
+      
+        <path d="M 940 398 H 957" stroke="#176BFF" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+      
+    </g>
+  
+    <g>
+      <rect x="964" y="218" width="270" height="360" rx="8" fill="#FFFFFF" stroke="#D8E2F0" stroke-width="1.5"/>
+      <rect x="964" y="218" width="6" height="360" rx="3" fill="#159B68"/>
+      <circle cx="1002" cy="260" r="20" fill="#EAF2FF"/>
+      <text x="1002" y="267" text-anchor="middle" font-size="16" font-weight="800" fill="#176BFF">04</text>
+      
+    <rect x="1118" y="245" width="74" height="30" rx="6" fill="#E9F8F1"/>
+    <circle cx="1133" cy="260" r="4" fill="#159B68"/>
+    <text x="1145" y="266" font-size="14" font-weight="700" fill="#159B68">已完成</text>
+  
+      <text x="988" y="314" font-size="22" fill="#17233C" font-weight="800" text-anchor="start"><tspan x="988" dy="0">执行与二次验证</tspan></text>
+      <text x="988" y="342" font-size="14" fill="#64748B" font-weight="400" text-anchor="start"><tspan x="988" dy="0">用动作前后证据确认效果</tspan></text>
+      <line x1="988" y1="366" x2="1210" y2="366" stroke="#D8E2F0"/>
+      
+        <circle cx="993" cy="401" r="4" fill="#176BFF"/>
+        <text x="1006" y="407" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1006" dy="0">HDC / Mock 执行 tap、swipe</tspan></text>
+      
+        <circle cx="993" cy="444" r="4" fill="#0EA5C6"/>
+        <text x="1006" y="450" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1006" dy="0">对比前后截图和页面上下文</tspan></text>
+      
+        <circle cx="993" cy="487" r="4" fill="#0EA5C6"/>
+        <text x="1006" y="493" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1006" dy="0">确认跳转、状态、弹层、外部</tspan></text>
+      
+        <circle cx="993" cy="530" r="4" fill="#0EA5C6"/>
+        <text x="1006" y="536" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1006" dy="0">记录边、结果与失败原因</tspan></text>
+      
+      
+        <path d="M 1242 398 H 1259" stroke="#176BFF" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)"/>
+      
+    </g>
+  
+    <g>
+      <rect x="1266" y="218" width="270" height="360" rx="8" fill="#FFFFFF" stroke="#D8E2F0" stroke-width="1.5"/>
+      <rect x="1266" y="218" width="6" height="360" rx="3" fill="#C77A08"/>
+      <circle cx="1304" cy="260" r="20" fill="#EAF2FF"/>
+      <text x="1304" y="267" text-anchor="middle" font-size="16" font-weight="800" fill="#176BFF">05</text>
+      
+    <rect x="1420" y="245" width="74" height="30" rx="6" fill="#FFF6DE"/>
+    <circle cx="1435" cy="260" r="4" fill="#C77A08"/>
+    <text x="1447" y="266" font-size="14" font-weight="700" fill="#C77A08">待联调</text>
+  
+      <text x="1290" y="314" font-size="22" fill="#17233C" font-weight="800" text-anchor="start"><tspan x="1290" dy="0">持久化与交付</tspan></text>
+      <text x="1290" y="342" font-size="14" fill="#64748B" font-weight="400" text-anchor="start"><tspan x="1290" dy="0">可中断恢复并进入后端</tspan></text>
+      <line x1="1290" y1="366" x2="1512" y2="366" stroke="#D8E2F0"/>
+      
+        <circle cx="1295" cy="401" r="4" fill="#176BFF"/>
+        <text x="1308" y="407" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1308" dy="0">SQLite 保存 Frontier 与 Attempt</tspan></text>
+      
+        <circle cx="1295" cy="444" r="4" fill="#0EA5C6"/>
+        <text x="1308" y="450" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1308" dy="0">action_fingerprint 防止重复</tspan></text>
+      
+        <circle cx="1295" cy="487" r="4" fill="#0EA5C6"/>
+        <text x="1308" y="493" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1308" dy="0">输出 ai_result.json + 截图</tspan></text>
+      
+        <circle cx="1295" cy="530" r="4" fill="#0EA5C6"/>
+        <text x="1308" y="536" font-size="15" fill="#17233C" font-weight="400" text-anchor="start"><tspan x="1308" dy="0">可调用 scan-folder 自动导入</tspan></text>
+      
+      
+    </g>
+  
+    
+    <g>
+      <rect x="58" y="616" width="720" height="214" rx="8" fill="#E9F8F1" stroke="#159B68" stroke-opacity="0.28"/>
+      <rect x="58" y="616" width="8" height="214" rx="4" fill="#159B68"/>
+      <text x="86" y="655" font-size="20" font-weight="800" fill="#159B68">已经完成</text>
+      
+        <circle cx="91" cy="692" r="5" fill="#159B68"/>
+        <text x="107" y="698" font-size="15" fill="#17233C">三种探索模式已经在 Mock 场景完成端到端验证</text>
+      
+        <circle cx="91" cy="731" r="5" fill="#159B68"/>
+        <text x="107" y="737" font-size="15" fill="#17233C">页面状态、动作尝试、路径和多入口边可以持续保存</text>
+      
+        <circle cx="91" cy="770" r="5" fill="#159B68"/>
+        <text x="107" y="776" font-size="15" fill="#17233C">DISCOVERY + VERIFICATION 两阶段识别已形成代码</text>
+      
+        <circle cx="91" cy="809" r="5" fill="#159B68"/>
+        <text x="107" y="815" font-size="15" fill="#17233C">输出结构已经兼容现有后端 AiFolderImporter</text>
+      
+    </g>
+  
+    
+    <g>
+      <rect x="822" y="616" width="720" height="214" rx="8" fill="#FFF6DE" stroke="#C77A08" stroke-opacity="0.28"/>
+      <rect x="822" y="616" width="8" height="214" rx="4" fill="#C77A08"/>
+      <text x="850" y="655" font-size="20" font-weight="800" fill="#C77A08">不足与下一步</text>
+      
+        <circle cx="855" cy="692" r="5" fill="#C77A08"/>
+        <text x="871" y="698" font-size="15" fill="#17233C">需要按真实 HarmonyOS 版本校准 HDC 命令模板</text>
+      
+        <circle cx="855" cy="731" r="5" fill="#C77A08"/>
+        <text x="871" y="737" font-size="15" fill="#17233C">需要接入真实视觉模型并建立识别准确率 Benchmark</text>
+      
+        <circle cx="855" cy="770" r="5" fill="#C77A08"/>
+        <text x="871" y="776" font-size="15" fill="#17233C">尚缺后端任务 Worker、心跳、暂停、取消和设备调度</text>
+      
+        <circle cx="855" cy="809" r="5" fill="#C77A08"/>
+        <text x="871" y="815" font-size="15" fill="#17233C">性能采集适配器与实时结果回传尚未接入脚本</text>
+      
+    </g>
+  
+    
+    <line x1="163" y1="942" x2="1403" y2="942" stroke="#D8E2F0" stroke-width="6" stroke-linecap="round"/>
+    
+        <circle cx="163" cy="942" r="15" fill="#176BFF" stroke="#FFFFFF" stroke-width="5"/>
+        <text x="163" y="980" text-anchor="middle" font-size="14" font-weight="800" fill="#176BFF">脚本采集</text>
+      
+        <circle cx="473" cy="942" r="11" fill="#9AA9BD" stroke="#FFFFFF" stroke-width="5"/>
+        <text x="473" y="980" text-anchor="middle" font-size="14" font-weight="600" fill="#9AA9BD">后端治理</text>
+      
+        <circle cx="783" cy="942" r="11" fill="#9AA9BD" stroke="#FFFFFF" stroke-width="5"/>
+        <text x="783" y="980" text-anchor="middle" font-size="14" font-weight="600" fill="#9AA9BD">前端应用</text>
+      
+        <circle cx="1093" cy="942" r="11" fill="#9AA9BD" stroke="#FFFFFF" stroke-width="5"/>
+        <text x="1093" y="980" text-anchor="middle" font-size="14" font-weight="600" fill="#9AA9BD">用例下发</text>
+      
+        <circle cx="1403" cy="942" r="11" fill="#9AA9BD" stroke="#FFFFFF" stroke-width="5"/>
+        <text x="1403" y="980" text-anchor="middle" font-size="14" font-weight="600" fill="#9AA9BD">真机结果</text>
+      
+  
+  </svg>
