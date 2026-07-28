@@ -76,7 +76,7 @@ const createUrlError = ref("");
 const tree = computed(() => props.graph.roots.map((rootId) => buildNode(rootId)));
 const floatingTree = computed(() => props.graph.floatingRoots.map((rootId) => buildNode(rootId)));
 const mainTreeNodeCount = computed(() => props.graph.pages.filter((page) => !page.isFloating).length);
-const aiNodeCount = computed(() => props.graph.pages.filter((page) => page.ai_recursive).length);
+const aiNodeCount = computed(() => props.graph.pages.filter((page) => page.aiRecursive).length);
 const searchResults = computed(() => {
   const normalized = props.keyword.trim().toLowerCase();
   if (!normalized) return [];
@@ -131,7 +131,7 @@ async function submitFloatingUrl() {
   createUrlError.value = "";
   try {
     await new Promise((resolve, reject) => {
-      emit("create-floating-node", { request: { page_url: pageUrl }, resolve, reject });
+      emit("create-floating-node", { request: { pageUrl: pageUrl }, resolve, reject });
     });
     createDialogOpen.value = false;
     floatingUrlDraft.value = "";
@@ -156,20 +156,20 @@ function toggleTreeEditMode() {
 function isMuted(node) {
   const normalized = props.keyword.trim().toLowerCase();
   const missesSearch = Boolean(normalized) && !searchableText(node.page).includes(normalized);
-  const missesAiGraph = props.aiGraphHighlighted && !node.page?.ai_recursive;
+  const missesAiGraph = props.aiGraphHighlighted && !node.page?.aiRecursive;
   return missesSearch || missesAiGraph;
 }
 
 function searchableText(page) {
   if (!page) return "";
   return [
-    page.page_title,
+    page.pageTitle,
     page.displayTitle,
-    page.page_text,
-    page.page_url,
+    page.pageText,
+    page.pageUrl,
     page.aiInference?.label,
     page.aiInference?.reason,
-    JSON.stringify(page.page_info || {})
+    JSON.stringify(page.pageInfo || {})
   ].join(" ").toLowerCase();
 }
 
@@ -233,7 +233,7 @@ function handleMoveTreeNode(payload) {
         @click="emit('select-node', page.nodeId)"
       >
         <strong>{{ page.displayTitle }}</strong>
-        <span>{{ page.page_url || "no url" }}</span>
+        <span>{{ page.pageUrl || "no url" }}</span>
       </GraphButton>
     </div>
 
@@ -382,7 +382,7 @@ function handleMoveTreeNode(payload) {
             </div>
             <strong>{{ node.page.aiInference.label }}</strong>
             <em>{{ node.page.aiInference.reason }}</em>
-            <small>{{ node.page.page_url || "no page url" }}</small>
+            <small>{{ node.page.pageUrl || "no page url" }}</small>
             <span
               v-if="floatingAiState[node.id]"
               class="floating-ai-status"

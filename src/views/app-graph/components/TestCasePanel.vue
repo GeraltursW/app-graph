@@ -11,9 +11,9 @@ const props = defineProps({
 
 const emit = defineEmits(['run-case', 'stop-case']);
 const isRunning = computed(() => props.execution.status === 'running'
-  && props.execution.caseId === props.testCase?.case_id);
+  && props.execution.caseId === props.testCase?.caseId);
 const displayedStep = computed(() => {
-  if (props.execution.caseId !== props.testCase?.case_id) return 0;
+  if (props.execution.caseId !== props.testCase?.caseId) return 0;
   return Math.min(props.execution.currentStep, props.testCase?.steps?.length || 0);
 });
 
@@ -34,10 +34,10 @@ function operationIcon(step) {
     <div class="panel-head case-panel-head">
       <div>
         <p class="eyebrow">Test Case</p>
-        <h2>{{ testCase?.case_name || '请选择用例' }}</h2>
+        <h2>{{ testCase?.caseName || '请选择用例' }}</h2>
       </div>
       <Badge v-if="testCase" variant="secondary">
-        {{ testCase.case_type === 'path' ? '全量路径' : testCase.source === 'user_configured' ? '用户配置' : testCase.source === 'demo_mock' ? '演示 Mock' : '场景模板' }}
+        {{ testCase.caseType === 'path' ? '全量路径' : testCase.source === 'userConfigured' ? '用户配置' : testCase.source === 'demo_mock' ? '演示 Mock' : '场景模板' }}
       </Badge>
     </div>
 
@@ -49,12 +49,12 @@ function operationIcon(step) {
             <strong>{{ testCase.startPage?.displayTitle || '未解析' }}</strong>
           </div>
           <div>
-            <span>{{ testCase.case_type === 'path' ? '目标页面' : '操作数量' }}</span>
-            <strong>{{ testCase.case_type === 'path' ? (testCase.targetPage?.displayTitle || '未解析') : `${testCase.steps.length} 步` }}</strong>
+            <span>{{ testCase.caseType === 'path' ? '目标页面' : '操作数量' }}</span>
+            <strong>{{ testCase.caseType === 'path' ? (testCase.targetPage?.displayTitle || '未解析') : `${testCase.steps.length} 步` }}</strong>
           </div>
           <div>
             <span>采集时长</span>
-            <strong>{{ testCase.collection.duration_seconds }} 秒</strong>
+            <strong>{{ testCase.collection.durationSeconds }} 秒</strong>
           </div>
           <div>
             <span>解析状态</span>
@@ -79,30 +79,30 @@ function operationIcon(step) {
           <div class="case-step-list">
             <div
               v-for="step in testCase.steps"
-              :key="`${testCase.case_id}-${step.step_no}`"
+              :key="`${testCase.caseId}-${step.stepNo}`"
               class="case-step"
               :class="{
-                active: isRunning && execution.currentStep === step.step_no,
-                completed: execution.caseId === testCase.case_id && execution.currentStep > step.step_no
+                active: isRunning && execution.currentStep === step.stepNo,
+                completed: execution.caseId === testCase.caseId && execution.currentStep > step.stepNo
               }"
             >
-              <span class="case-step-index">{{ String(step.step_no).padStart(2, '0') }}</span>
+              <span class="case-step-index">{{ String(step.stepNo).padStart(2, '0') }}</span>
               <span class="case-step-icon"><Icon :icon="operationIcon(step)" :size="15" /></span>
               <span class="case-step-copy">
                 <strong>{{ step.title }}</strong>
                 <em v-if="step.type === 'swipe'">{{ step.target || '页面内容区' }} · {{ step.direction === 'up' ? '向上' : step.direction }} · 重复 {{ step.repeat || 1 }} 次</em>
-                <em v-else-if="step.type === 'long_press'">{{ step.target || '目标区域' }} · 持续 {{ step.duration_ms }} ms</em>
+                <em v-else-if="step.type === 'long_press'">{{ step.target || '目标区域' }} · 持续 {{ step.durationMs }} ms</em>
                 <em v-else-if="step.type === 'tap'">点击 {{ step.target || '目标控件' }} · 重复 {{ step.repeat || 1 }} 次</em>
-                <em v-else-if="step.type === 'wait'">等待 {{ step.duration_ms }} ms</em>
+                <em v-else-if="step.type === 'wait'">等待 {{ step.durationMs }} ms</em>
                 <em v-else-if="step.type === 'collect'">在目标页面记录全部性能指标</em>
                 <em v-else>校验目标页面后继续执行</em>
               </span>
-              <Icon v-if="execution.caseId === testCase.case_id && execution.currentStep > step.step_no" class="case-step-check" icon="ant-design:check-circle-filled" :size="16" />
+              <Icon v-if="execution.caseId === testCase.caseId && execution.currentStep > step.stepNo" class="case-step-check" icon="ant-design:check-circle-filled" :size="16" />
             </div>
           </div>
         </section>
 
-        <section v-if="execution.caseId === testCase.case_id && execution.result" class="case-result">
+        <section v-if="execution.caseId === testCase.caseId && execution.result" class="case-result">
           <div class="case-result-score">
             <strong>{{ execution.result.score }}</strong>
             <span>性能评分</span>
@@ -122,10 +122,10 @@ function operationIcon(step) {
             type="primary"
             html-type="button"
             :disabled="!testCase.resolved"
-            @click="emit('run-case', testCase.case_id)"
+            @click="emit('run-case', testCase.caseId)"
           >
             <template #icon><Icon icon="ant-design:play-circle-outlined" :size="15" /></template>
-            {{ execution.caseId === testCase.case_id && execution.result ? '重新执行' : '下发并模拟执行' }}
+            {{ execution.caseId === testCase.caseId && execution.result ? '重新执行' : '下发并模拟执行' }}
           </GraphButton>
           <GraphButton v-else danger html-type="button" @click="emit('stop-case')">
             <template #icon><Icon icon="ant-design:stop-outlined" :size="15" /></template>

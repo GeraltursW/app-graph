@@ -26,46 +26,46 @@ const operationOptions = [
 ];
 const presets = {
   scroll: [
-    { type: 'wait', label: '等待页面稳定', target: '当前页面', duration_ms: 1500, repeat: 1, direction: 'up' },
-    { type: 'swipe', label: '连续向上滑动', target: '页面内容区', duration_ms: 420, repeat: 5, direction: 'up' },
-    { type: 'wait', label: '内容停留', target: '当前页面', duration_ms: 1800, repeat: 1, direction: 'up' },
+    { type: 'wait', label: '等待页面稳定', target: '当前页面', durationMs: 1500, repeat: 1, direction: 'up' },
+    { type: 'swipe', label: '连续向上滑动', target: '页面内容区', durationMs: 420, repeat: 5, direction: 'up' },
+    { type: 'wait', label: '内容停留', target: '当前页面', durationMs: 1800, repeat: 1, direction: 'up' },
   ],
   longPress: [
-    { type: 'wait', label: '等待页面稳定', target: '当前页面', duration_ms: 1200, repeat: 1, direction: 'up' },
-    { type: 'long_press', label: '长按核心内容', target: '核心内容区', duration_ms: 800, repeat: 1, direction: 'up' },
-    { type: 'wait', label: '观察交互结果', target: '当前页面', duration_ms: 1200, repeat: 1, direction: 'up' },
+    { type: 'wait', label: '等待页面稳定', target: '当前页面', durationMs: 1200, repeat: 1, direction: 'up' },
+    { type: 'long_press', label: '长按核心内容', target: '核心内容区', durationMs: 800, repeat: 1, direction: 'up' },
+    { type: 'wait', label: '观察交互结果', target: '当前页面', durationMs: 1200, repeat: 1, direction: 'up' },
   ],
   mixed: [
-    { type: 'swipe', label: '向上浏览内容', target: '页面内容区', duration_ms: 420, repeat: 3, direction: 'up' },
-    { type: 'long_press', label: '长按内容区域', target: '核心内容区', duration_ms: 800, repeat: 1, direction: 'up' },
-    { type: 'swipe', label: '向下回退浏览', target: '页面内容区', duration_ms: 420, repeat: 2, direction: 'down' },
+    { type: 'swipe', label: '向上浏览内容', target: '页面内容区', durationMs: 420, repeat: 3, direction: 'up' },
+    { type: 'long_press', label: '长按内容区域', target: '核心内容区', durationMs: 800, repeat: 1, direction: 'up' },
+    { type: 'swipe', label: '向下回退浏览', target: '页面内容区', durationMs: 420, repeat: 2, direction: 'down' },
   ],
 };
 
 const draft = reactive({
-  case_name: '',
-  start_page_id: '',
-  duration_seconds: 30,
+  caseName: '',
+  startPageId: '',
+  durationSeconds: 30,
   metrics: ['CPU', '内存', 'FPS', '功耗'],
   operations: [],
 });
 const canSubmit = computed(() => (
-  draft.case_name.trim()
-  && draft.start_page_id
+  draft.caseName.trim()
+  && draft.startPageId
   && draft.operations.length
   && draft.metrics.length
 ));
 
 watch(() => props.open, (open) => {
   if (!open) return;
-  if (!draft.start_page_id) draft.start_page_id = props.pages[0]?.nodeId || '';
+  if (!draft.startPageId) draft.startPageId = props.pages[0]?.nodeId || '';
   if (!draft.operations.length) applyPreset('scroll');
 });
 
 function applyPreset(key) {
   draft.operations = presets[key].map((item) => ({ ...item }));
-  if (!draft.case_name) {
-    draft.case_name = {
+  if (!draft.caseName) {
+    draft.caseName = {
       scroll: '页面连续滑动性能',
       longPress: '页面长按交互性能',
       mixed: '混合操作性能',
@@ -78,7 +78,7 @@ function addOperation() {
     type: 'swipe',
     label: '新增操作',
     target: '页面内容区',
-    duration_ms: 420,
+    durationMs: 420,
     repeat: 1,
     direction: 'up',
   });
@@ -98,16 +98,16 @@ function moveOperation(index, offset) {
 function submit() {
   if (!canSubmit.value) return;
   emit('create', {
-    case_id: `custom-scenario-${Date.now()}`,
-    case_name: draft.case_name.trim(),
-    case_type: 'scenario',
-    source: 'user_configured',
+    caseId: `custom-scenario-${Date.now()}`,
+    caseName: draft.caseName.trim(),
+    caseType: 'scenario',
+    source: 'userConfigured',
     description: `用户配置的过程采集用例，包含 ${draft.operations.length} 类操作组合。`,
-    start_page_id: draft.start_page_id,
+    startPageId: draft.startPageId,
     operations: draft.operations.map((item) => ({ ...item })),
     collection: {
-      trigger: 'case_lifecycle',
-      duration_seconds: draft.duration_seconds,
+      trigger: 'caseLifecycle',
+      durationSeconds: draft.durationSeconds,
       metrics: [...draft.metrics],
     },
   });
@@ -130,12 +130,12 @@ function submit() {
       <section class="scenario-builder-basic">
         <label>
           <span>用例名称</span>
-          <a-input v-model:value="draft.case_name" placeholder="例如：信息流连续滑动性能" />
+          <a-input v-model:value="draft.caseName" placeholder="例如：信息流连续滑动性能" />
         </label>
         <label>
           <span>起始页面</span>
           <a-select
-            v-model:value="draft.start_page_id"
+            v-model:value="draft.startPageId"
             show-search
             option-filter-prop="label"
             placeholder="选择图谱节点"
@@ -152,7 +152,7 @@ function submit() {
         </label>
         <label>
           <span>采集时长（秒）</span>
-          <a-input-number v-model:value="draft.duration_seconds" :min="5" :max="600" />
+          <a-input-number v-model:value="draft.durationSeconds" :min="5" :max="600" />
         </label>
       </section>
 
@@ -190,7 +190,7 @@ function submit() {
             </a-select>
             <a-input v-else v-model:value="operation.target" placeholder="控件或区域" />
             <a-input-number v-model:value="operation.repeat" :min="1" :max="50" addon-after="次" />
-            <a-input-number v-model:value="operation.duration_ms" :min="100" :max="10000" :step="100" addon-after="ms" />
+            <a-input-number v-model:value="operation.durationMs" :min="100" :max="10000" :step="100" addon-after="ms" />
             <span class="scenario-operation-actions">
               <a-button type="text" size="small" :disabled="index === 0" @click="moveOperation(index, -1)">
                 <Icon icon="ant-design:arrow-up-outlined" :size="13" />

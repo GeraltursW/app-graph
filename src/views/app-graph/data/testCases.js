@@ -1,6 +1,6 @@
 export function resolveTestCases(graph, templates = []) {
   return templates.map((template) => (
-    template.case_type === 'path'
+    template.caseType === 'path'
       ? resolvePathCase(graph, template)
       : resolveScenarioCase(graph, template)
   ));
@@ -8,8 +8,8 @@ export function resolveTestCases(graph, templates = []) {
 
 export function generateFullCoveragePathCases(graph, options = {}) {
   const collection = options.collection || {
-    trigger: 'target_page_ready',
-    duration_seconds: 30,
+    trigger: 'targetPageReady',
+    durationSeconds: 30,
     metrics: ['CPU', '内存', 'FPS', '功耗', '温度'],
   };
   const cases = [];
@@ -43,42 +43,42 @@ export function generateMockScenarioCases(graph, count = 80, options = {}) {
     (page) => ({
       suffix: '连续滑动',
       operations: [
-        { type: 'wait', label: '等待页面稳定', target: page.displayTitle, duration_ms: 1200, repeat: 1 },
-        { type: 'swipe', label: '连续向上浏览', target: '页面内容区', direction: 'up', duration_ms: 420, repeat: 5 },
-        { type: 'wait', label: '观察内容加载', target: page.displayTitle, duration_ms: 1600, repeat: 1 },
+        { type: 'wait', label: '等待页面稳定', target: page.displayTitle, durationMs: 1200, repeat: 1 },
+        { type: 'swipe', label: '连续向上浏览', target: '页面内容区', direction: 'up', durationMs: 420, repeat: 5 },
+        { type: 'wait', label: '观察内容加载', target: page.displayTitle, durationMs: 1600, repeat: 1 },
       ],
     }),
     () => ({
       suffix: '长按交互',
       operations: [
-        { type: 'wait', label: '等待页面稳定', target: '当前页面', duration_ms: 1000, repeat: 1 },
-        { type: 'long_press', label: '长按核心内容', target: '核心内容区', duration_ms: 800, repeat: 2 },
-        { type: 'wait', label: '观察弹层反馈', target: '当前页面', duration_ms: 1400, repeat: 1 },
+        { type: 'wait', label: '等待页面稳定', target: '当前页面', durationMs: 1000, repeat: 1 },
+        { type: 'long_press', label: '长按核心内容', target: '核心内容区', durationMs: 800, repeat: 2 },
+        { type: 'wait', label: '观察弹层反馈', target: '当前页面', durationMs: 1400, repeat: 1 },
       ],
     }),
     () => ({
       suffix: '点击响应',
       operations: [
-        { type: 'tap', label: '点击首个可交互控件', target: '首个主要控件', duration_ms: 200, repeat: 3 },
-        { type: 'wait', label: '等待状态刷新', target: '当前页面', duration_ms: 900, repeat: 1 },
-        { type: 'tap', label: '点击次要控件', target: '次要操作区', duration_ms: 200, repeat: 2 },
+        { type: 'tap', label: '点击首个可交互控件', target: '首个主要控件', durationMs: 200, repeat: 3 },
+        { type: 'wait', label: '等待状态刷新', target: '当前页面', durationMs: 900, repeat: 1 },
+        { type: 'tap', label: '点击次要控件', target: '次要操作区', durationMs: 200, repeat: 2 },
       ],
     }),
     () => ({
       suffix: '往返滚动',
       operations: [
-        { type: 'swipe', label: '向上滚动', target: '页面内容区', direction: 'up', duration_ms: 380, repeat: 4 },
-        { type: 'wait', label: '中段停留', target: '当前页面', duration_ms: 1200, repeat: 1 },
-        { type: 'swipe', label: '向下回滚', target: '页面内容区', direction: 'down', duration_ms: 380, repeat: 3 },
+        { type: 'swipe', label: '向上滚动', target: '页面内容区', direction: 'up', durationMs: 380, repeat: 4 },
+        { type: 'wait', label: '中段停留', target: '当前页面', durationMs: 1200, repeat: 1 },
+        { type: 'swipe', label: '向下回滚', target: '页面内容区', direction: 'down', durationMs: 380, repeat: 3 },
       ],
     }),
     () => ({
       suffix: '混合压力',
       operations: [
-        { type: 'swipe', label: '连续浏览内容', target: '页面内容区', direction: 'up', duration_ms: 400, repeat: 3 },
-        { type: 'long_press', label: '长按内容区域', target: '核心内容区', duration_ms: 700, repeat: 1 },
-        { type: 'tap', label: '点击操作入口', target: '主要操作区', duration_ms: 180, repeat: 3 },
-        { type: 'wait', label: '持续观察', target: '当前页面', duration_ms: 1800, repeat: 1 },
+        { type: 'swipe', label: '连续浏览内容', target: '页面内容区', direction: 'up', durationMs: 400, repeat: 3 },
+        { type: 'long_press', label: '长按内容区域', target: '核心内容区', durationMs: 700, repeat: 1 },
+        { type: 'tap', label: '点击操作入口', target: '主要操作区', durationMs: 180, repeat: 3 },
+        { type: 'wait', label: '持续观察', target: '当前页面', durationMs: 1800, repeat: 1 },
       ],
     }),
   ];
@@ -92,18 +92,18 @@ export function generateMockScenarioCases(graph, count = 80, options = {}) {
     const page = pages[(index * 37 + Math.floor(index / pages.length)) % pages.length];
     const operationSet = operationFactories[index % operationFactories.length](page);
     return {
-      case_id: `demo-scenario-${String(index + 1).padStart(3, '0')}`,
-      case_name: `演示 ${String(index + 1).padStart(2, '0')} · ${page.displayTitle}${operationSet.suffix}`,
-      case_type: 'scenario',
+      caseId: `demo-scenario-${String(index + 1).padStart(3, '0')}`,
+      caseName: `演示 ${String(index + 1).padStart(2, '0')} · ${page.displayTitle}${operationSet.suffix}`,
+      caseType: 'scenario',
       source: 'demo_mock',
-      mock_index: index + 1,
-      app_name: options.appName || '',
+      mockIndex: index + 1,
+      appName: options.appName || '',
       description: `Mock 过程采集用例，验证 ${page.displayTitle} 的${operationSet.suffix}性能。`,
-      start_page_id: page.nodeId,
+      startPageId: page.nodeId,
       operations: operationSet.operations,
       collection: {
-        trigger: 'case_lifecycle',
-        duration_seconds: 18 + (index % 7) * 4,
+        trigger: 'caseLifecycle',
+        durationSeconds: 18 + (index % 7) * 4,
         metrics: metricSets[index % metricSets.length],
       },
     };
@@ -119,19 +119,19 @@ function createPathCase(graph, pages, edges, collection, appName = '') {
   ].join('|'));
   const edgeSteps = edges.map((edge, index) => ({
     ...edge,
-    step_no: index + 1,
-    action_label: edge.widget_description || edge.label || '进入',
-    expected_page_id: graph.pageMap.get(edge.to)?.pageId || '',
-    expected_page_title: graph.pageMap.get(edge.to)?.displayTitle || '',
+    stepNo: index + 1,
+    actionLabel: edge.widgetDescription || edge.label || '进入',
+    expectedPageId: graph.pageMap.get(edge.to)?.pageId || '',
+    expectedPageTitle: graph.pageMap.get(edge.to)?.displayTitle || '',
   }));
   const stableTargetId = targetPage.pageId || targetPage.nodeId;
   return {
-    case_id: `coverage-path-${stableTargetId}-${pathFingerprint}`,
-    path_fingerprint: pathFingerprint,
-    case_name: `${targetPage.displayTitle} · 终点采集`,
-    case_type: 'path',
-    source: 'graph_coverage',
-    app_name: appName,
+    caseId: `coverage-path-${stableTargetId}-${pathFingerprint}`,
+    pathFingerprint: pathFingerprint,
+    caseName: `${targetPage.displayTitle} · 终点采集`,
+    caseType: 'path',
+    source: 'graphCoverage',
+    appName: appName,
     description: `自动生成的全量覆盖路径，共 ${pages.length} 个页面，到达终点后采集性能。`,
     resolved: true,
     pages,
@@ -143,17 +143,17 @@ function createPathCase(graph, pages, edges, collection, appName = '') {
     collection: { ...collection, metrics: [...collection.metrics] },
     steps: [
       ...edgeSteps.map((edge) => ({
-        step_no: edge.step_no,
+        stepNo: edge.stepNo,
         type: 'navigate',
-        page_id: edge.from,
-        edge_id: edge.id,
-        title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.action_label}`,
-        expected_page_id: edge.to,
+        pageId: edge.from,
+        edgeId: edge.id,
+        title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.actionLabel}`,
+        expectedPageId: edge.to,
       })),
       {
-        step_no: edgeSteps.length + 1,
+        stepNo: edgeSteps.length + 1,
         type: 'collect',
-        page_id: targetPage.nodeId,
+        pageId: targetPage.nodeId,
         title: `${targetPage.displayTitle} · 终点性能采集`,
       },
     ],
@@ -172,7 +172,7 @@ function hashPath(value) {
 function resolvePathCase(graph, template) {
   const pages = [];
   const edgeSteps = [];
-  for (const title of template.path_titles || []) {
+  for (const title of template.pathTitles || []) {
     const page = findPage(graph, title);
     if (page) pages.push(page);
   }
@@ -184,14 +184,14 @@ function resolvePathCase(graph, template) {
     if (!edge) continue;
     edgeSteps.push({
       ...edge,
-      step_no: index + 1,
-      action_label: edge.widget_description || edge.label || '进入',
-      expected_page_id: to.pageId,
-      expected_page_title: to.displayTitle,
+      stepNo: index + 1,
+      actionLabel: edge.widgetDescription || edge.label || '进入',
+      expectedPageId: to.pageId,
+      expectedPageTitle: to.displayTitle,
     });
   }
 
-  const complete = pages.length === (template.path_titles || []).length
+  const complete = pages.length === (template.pathTitles || []).length
     && edgeSteps.length === Math.max(0, pages.length - 1);
   return {
     ...template,
@@ -204,17 +204,17 @@ function resolvePathCase(graph, template) {
     targetPage: pages.at(-1) || null,
     steps: [
       ...edgeSteps.map((edge) => ({
-        step_no: edge.step_no,
+        stepNo: edge.stepNo,
         type: 'navigate',
-        page_id: edge.from,
-        edge_id: edge.id,
-        title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.action_label}`,
-        expected_page_id: edge.to,
+        pageId: edge.from,
+        edgeId: edge.id,
+        title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.actionLabel}`,
+        expectedPageId: edge.to,
       })),
       ...(pages.length ? [{
-        step_no: edgeSteps.length + 1,
+        stepNo: edgeSteps.length + 1,
         type: 'collect',
-        page_id: pages.at(-1).nodeId,
+        pageId: pages.at(-1).nodeId,
         title: `${pages.at(-1).displayTitle} · 性能采集`,
       }] : []),
     ],
@@ -224,7 +224,7 @@ function resolvePathCase(graph, template) {
 function resolveScenarioCase(graph, template) {
   const startPage = findPage(
     graph,
-    template.start_page_id || template.start_page_title,
+    template.startPageId || template.startPageTitle,
   );
   return {
     ...template,
@@ -237,8 +237,8 @@ function resolveScenarioCase(graph, template) {
     targetPage: startPage,
     steps: (template.operations || []).map((operation, index) => ({
       ...operation,
-      step_no: index + 1,
-      page_id: startPage?.nodeId || '',
+      stepNo: index + 1,
+      pageId: startPage?.nodeId || '',
       title: operation.label,
     })),
   };
@@ -249,17 +249,17 @@ function findPage(graph, title) {
   if (graph.pageMap.has(title)) return graph.pageMap.get(title);
   const byPageId = graph.pages.find((page) => page.pageId === title);
   if (byPageId) return byPageId;
-  const exact = graph.pages.find((page) => page.page_title === title || page.displayTitle === title);
+  const exact = graph.pages.find((page) => page.pageTitle === title || page.displayTitle === title);
   if (exact) return exact;
   const normalized = String(title || '').toLowerCase();
   return graph.pages.find((page) => (
-    page.page_title.toLowerCase().includes(normalized)
+    page.pageTitle.toLowerCase().includes(normalized)
     || page.displayTitle.toLowerCase().includes(normalized)
   )) || null;
 }
 
 export function createMockPerformanceResult(testCase) {
-  if (testCase.case_type === 'path') {
+  if (testCase.caseType === 'path') {
     return {
       score: 86,
       summary: '目标页面稳定，功耗存在轻微峰值。',
@@ -271,7 +271,7 @@ export function createMockPerformanceResult(testCase) {
       ],
     };
   }
-  const seed = stableSeed(testCase.case_id || testCase.case_name || 'scenario');
+  const seed = stableSeed(testCase.caseId || testCase.caseName || 'scenario');
   const score = 68 + (seed % 27);
   const fps = (48 + (seed % 115) / 10).toFixed(1);
   const jank = (2.1 + (seed % 58) / 10).toFixed(1);

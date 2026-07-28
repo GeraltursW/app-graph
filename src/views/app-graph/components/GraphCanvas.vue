@@ -55,7 +55,7 @@ const normalizedKeyword = computed(() => props.keyword.trim().toLowerCase());
 const hoveredPage = ref(null);
 const caseMode = computed(() => Boolean(props.testCase));
 const caseEdgeStepMap = computed(() => new Map(
-  (props.testCase?.edgeSteps || []).map((edge) => [edge.id, edge.step_no]),
+  (props.testCase?.edgeSteps || []).map((edge) => [edge.id, edge.stepNo]),
 ));
 const caseNodeStepMap = computed(() => new Map(
   (props.testCase?.pageIds || []).map((nodeId, index) => [nodeId, index + 1]),
@@ -68,18 +68,18 @@ const previewCandidates = computed(() => {
 
 function searchableText(page) {
   return [
-    page.page_title,
+    page.pageTitle,
     page.displayTitle,
-    page.page_text,
-    page.page_url,
+    page.pageText,
+    page.pageUrl,
     page.aiInference?.label,
     page.aiInference?.reason,
-    JSON.stringify(page.page_info || {}),
+    JSON.stringify(page.pageInfo || {}),
   ].join(' ').toLowerCase();
 }
 
 function formatEdgeControlLabel(edge = {}) {
-  const label = String(edge.label || edge.widget_description || '进入').trim();
+  const label = String(edge.label || edge.widgetDescription || '进入').trim();
   const controlName = label.replace(/^(点击|轻触|打开|进入)/, '').trim() || label;
   return controlName.length > 8 ? `${controlName.slice(0, 8)}...` : controlName;
 }
@@ -205,8 +205,8 @@ function toG6Data() {
           style: {
             size: [width, height],
             title: page.displayTitle,
-            description: page.page_text,
-            pageUrl: page.page_url,
+            description: page.pageText,
+            pageUrl: page.pageUrl,
             imageSrc: firstImage ? buildImageApiUrl(firstImage) : '',
             metaText: `L${page.level}  ${outgoingCount} 个下级`,
             outgoingCount,
@@ -216,13 +216,13 @@ function toG6Data() {
             accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
             badgeText: caseActive
               ? '执行中'
-              : caseRole || (page.ai_recursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
-            aiRecursive: page.ai_recursive,
+              : caseRole || (page.aiRecursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
+            aiRecursive: page.aiRecursive,
             caseRole,
             caseStep,
             caseActive,
             matched: (!keyword || searchableText(page).includes(keyword))
-              && (!props.aiGraphHighlighted || page.ai_recursive)
+              && (!props.aiGraphHighlighted || page.aiRecursive)
               && (!props.functionHighlightActive || functionPageIds.has(page.nodeId))
               && (!caseMode.value || testCasePageIds.has(page.nodeId)),
             onPreview: () => openPreview(page),
@@ -256,17 +256,17 @@ function toG6Data() {
 
 function getCaseNodeRole(nodeId, step) {
   if (!props.testCase || !step) return '';
-  if (props.testCase.case_type === 'scenario') return '场景';
+  if (props.testCase.caseType === 'scenario') return '场景';
   if (nodeId === props.testCase.startPage?.nodeId) return '起点';
   if (nodeId === props.testCase.targetPage?.nodeId) return '采集';
   return `步骤${step}`;
 }
 
 function getActiveCaseNodeId() {
-  if (!props.testCase || props.caseExecution.caseId !== props.testCase.case_id) return '';
+  if (!props.testCase || props.caseExecution.caseId !== props.testCase.caseId) return '';
   if (props.caseExecution.status !== 'running') return '';
   const current = props.testCase.steps?.[props.caseExecution.currentStep - 1];
-  return current?.page_id || '';
+  return current?.pageId || '';
 }
 
 function getLayout() {
@@ -323,12 +323,12 @@ function createGraph() {
           ? '#16a34a'
           : datum.style.caseRole
             ? '#2563eb'
-            : datum.data.page.ai_recursive
+            : datum.data.page.aiRecursive
               ? '#eab308'
               : datum.data.page.isFloating ? '#f59e0b' : '#b9c9dc',
         lineWidth: (datum) => datum.style.caseActive
           ? 4
-          : datum.style.caseRole || datum.data.page.ai_recursive || datum.data.page.isFloating ? 2 : 1.5,
+          : datum.style.caseRole || datum.data.page.aiRecursive || datum.data.page.isFloating ? 2 : 1.5,
         radius: 6,
         shadowColor: 'rgba(40, 79, 128, 0.15)',
         shadowBlur: 12,
@@ -589,10 +589,10 @@ onBeforeUnmount(() => {
       <em>{{ highlightedPageIds.length }} 个页面</em>
     </div>
     <div v-if="testCase" class="canvas-case-filter" :class="{ running: caseExecution.status === 'running' }">
-      <Icon :icon="testCase.case_type === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="14" />
-      <span>{{ testCase.case_type === 'path' ? '路径采集' : '场景性能' }}</span>
-      <strong>{{ testCase.case_name }}</strong>
-      <em v-if="caseExecution.caseId === testCase.case_id && caseExecution.status === 'running'">
+      <Icon :icon="testCase.caseType === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="14" />
+      <span>{{ testCase.caseType === 'path' ? '路径采集' : '场景性能' }}</span>
+      <strong>{{ testCase.caseName }}</strong>
+      <em v-if="caseExecution.caseId === testCase.caseId && caseExecution.status === 'running'">
         步骤 {{ caseExecution.currentStep }}/{{ testCase.steps.length }}
       </em>
     </div>
@@ -600,8 +600,8 @@ onBeforeUnmount(() => {
     <div ref="containerRef" class="g6-canvas" />
     <div v-if="hoveredPage" class="graph-node-tooltip">
       <strong>{{ hoveredPage.displayTitle }}</strong>
-      <p>{{ hoveredPage.page_text || '暂无页面描述' }}</p>
-      <span>{{ hoveredPage.page_url || '暂无页面 URL' }}</span>
+      <p>{{ hoveredPage.pageText || '暂无页面描述' }}</p>
+      <span>{{ hoveredPage.pageUrl || '暂无页面 URL' }}</span>
     </div>
     <div v-if="loading || rendering" class="g6-rendering">
       {{ loading ? '正在加载图谱' : '正在计算布局' }}

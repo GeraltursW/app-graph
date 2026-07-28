@@ -61,8 +61,8 @@ const detail = computed(() => {
       title: `${fromPage?.displayTitle || edge.from} -> ${toPage?.displayTitle || edge.to}`,
       rows: [
         ["跳转关系", `${fromPage?.displayTitle || edge.from} -> ${toPage?.displayTitle || edge.to}`],
-        ["父节点控件", edge.widget_description || edge.label || "-"],
-        ["动作类型", edge.action_type || "navigate"],
+        ["父节点控件", edge.widgetDescription || edge.label || "-"],
+        ["动作类型", edge.actionType || "navigate"],
         ["边 ID", edge.id]
       ],
       images: [
@@ -86,35 +86,35 @@ const detail = computed(() => {
     imageUrls,
     rows: [
       ["页面 ID", page.pageId || "-"],
-      ["页面标题", page.page_title],
+      ["页面标题", page.pageTitle],
       ["页面归属", page.isFloating ? "游离 URL 页面" : "主图谱页面"],
-      ["页面 URL", page.page_url || "-"],
-      ["AI 推断图片", page.ai_recursive ? "是" : "否"],
-      ["父节点控件", page.widget_description || "-"],
+      ["页面 URL", page.pageUrl || "-"],
+      ["AI 推断图片", page.aiRecursive ? "是" : "否"],
+      ["父节点控件", page.widgetDescription || "-"],
       ["图谱层级", `第 ${page.level} 层`],
       ["父节点", props.graph.pageMap.get(page.parentId)?.displayTitle || "-"],
       ["上游入口", `${incoming.length} 个`],
       ["下游节点", `${outgoing.length} 个`],
       ["页面内动作", `${page.pageActions.length} 个`],
-      ["复核状态", page.review_status || "pending"]
+      ["复核状态", page.reviewStatus || "pending"]
     ],
     images: imageItemsForPage(page, "主截图"),
     json: {
       nodeId: page.nodeId,
     pageId: page.pageId || "",
       backendId: page.backendId,
-      page_title: page.page_title,
-      page_text: page.page_text,
-      image_url: page.image_url,
-      image_urls: imageUrls,
-      ai_recursive: page.ai_recursive,
-      page_url: page.page_url,
-      widget_description: page.widget_description,
-      page_info: page.page_info,
+      pageTitle: page.pageTitle,
+      pageText: page.pageText,
+      imageUrl: page.imageUrl,
+      imageUrls: imageUrls,
+      aiRecursive: page.aiRecursive,
+      pageUrl: page.pageUrl,
+      widgetDescription: page.widgetDescription,
+      pageInfo: page.pageInfo,
       action: page.action,
-      ai_inference: page.aiInference,
-      review_status: page.review_status,
-      review_note: page.review_note,
+      aiInference: page.aiInference,
+      reviewStatus: page.reviewStatus,
+      reviewNote: page.reviewNote,
       path: getAncestorPath(props.graph, page.nodeId),
       incomingEdges: incoming,
       outgoingEdges: outgoing
@@ -145,17 +145,17 @@ function createEmptyForm() {
   return {
     nodeId: "",
     pageId: "",
-    page_title: "",
-    page_text: "",
-    page_url: "",
-    widget_description: "",
-    ai_recursive: false,
-    ai_inference_label: "",
-    ai_inference_reason: "",
+    pageTitle: "",
+    pageText: "",
+    pageUrl: "",
+    widgetDescription: "",
+    aiRecursive: false,
+    aiInferenceLabel: "",
+    aiInferenceReason: "",
     action: createEmptyAction(),
-    image_urls: [],
-    new_images: [],
-    review_note: ""
+    imageUrls: [],
+    newImages: [],
+    reviewNote: ""
   };
 }
 
@@ -167,16 +167,16 @@ function hydrateForm() {
   Object.assign(form, {
     nodeId: page.nodeId,
     pageId: page.pageId || "",
-    page_title: page.page_title || "",
-    page_text: page.page_text || "",
-    page_url: page.page_url || "",
-    widget_description: page.widget_description || "",
-    ai_recursive: Boolean(page.ai_recursive),
-    ai_inference_label: page.aiInference?.label || "",
-    ai_inference_reason: page.aiInference?.reason || "",
+    pageTitle: page.pageTitle || "",
+    pageText: page.pageText || "",
+    pageUrl: page.pageUrl || "",
+    widgetDescription: page.widgetDescription || "",
+    aiRecursive: Boolean(page.aiRecursive),
+    aiInferenceLabel: page.aiInference?.label || "",
+    aiInferenceReason: page.aiInference?.reason || "",
     action: cloneAction(page.action),
-    image_urls: normalizeImageUrls(page),
-    review_note: page.review_note || ""
+    imageUrls: normalizeImageUrls(page),
+    reviewNote: page.reviewNote || ""
   });
 }
 
@@ -232,14 +232,14 @@ function selectImagePreview(index) {
 }
 
 function handleNewImages(event) {
-  form.new_images = Array.from(event.target.files || []);
+  form.newImages = Array.from(event.target.files || []);
 }
 
 function removeNewImage(index) {
-  form.new_images.splice(index, 1);
+  form.newImages.splice(index, 1);
 }
 function removeImage(index) {
-  form.image_urls.splice(index, 1);
+  form.imageUrls.splice(index, 1);
 }
 
 function cloneAction(action = {}) {
@@ -253,7 +253,7 @@ function addAction(groupKey) {
   form.action[groupKey].push({
     id: `manual-${Date.now()}`,
     label: "",
-    action_type: "tap",
+    actionType: "tap",
     description: ""
   });
 }
@@ -264,10 +264,10 @@ function removeAction(groupKey, index) {
 
 function actionTargetField(groupKey) {
   return {
-    popupAction: { key: "popup_name", label: "弹窗/面板名称" },
-    stateAction: { key: "state_key", label: "状态字段" },
+    popupAction: { key: "popupName", label: "弹窗/面板名称" },
+    stateAction: { key: "stateKey", label: "状态字段" },
     externalAction: { key: "target", label: "外部目标" },
-    pageNaviAction: { key: "target_page_id", label: "目标页面 ID" }
+    pageNaviAction: { key: "targetPageId", label: "目标页面 ID" }
   }[groupKey];
 }
 
@@ -278,16 +278,16 @@ async function saveEdit() {
   createMessage.loading({ content: "正在保存页面复核...", key: "app-graph-save-review", duration: 0 });
   const review = {
     nodeId: form.nodeId,
-    page_title: form.page_title.trim() || "Unnamed Page",
-    page_text: form.page_text,
-    page_url: form.page_url,
-    widget_description: form.widget_description,
-    ai_recursive: form.ai_recursive,
-    keep_images: [...form.image_urls],
-    new_images: [...form.new_images],
-    ai_inference: {
-      label: form.ai_inference_label,
-      reason: form.ai_inference_reason
+    pageTitle: form.pageTitle.trim() || "Unnamed Page",
+    pageText: form.pageText,
+    pageUrl: form.pageUrl,
+    widgetDescription: form.widgetDescription,
+    aiRecursive: form.aiRecursive,
+    keepImages: [...form.imageUrls],
+    newImages: [...form.newImages],
+    aiInference: {
+      label: form.aiInferenceLabel,
+      reason: form.aiInferenceReason
     },
     action: cloneAction(form.action)
   };
@@ -369,33 +369,33 @@ async function saveEdit() {
           <CardContent class="review-editor-content">
             <label>
               页面标题
-              <input v-model="form.page_title" type="text" />
+              <input v-model="form.pageTitle" type="text" />
             </label>
             <label>
               页面 URL
-              <input v-model="form.page_url" type="text" />
+              <input v-model="form.pageUrl" type="text" />
             </label>
             <label>
               父节点控件描述
-              <input v-model="form.widget_description" type="text" />
+              <input v-model="form.widgetDescription" type="text" />
             </label>
             <label>
               AI 页面描述
-              <textarea v-model="form.page_text" rows="5" />
+              <textarea v-model="form.pageText" rows="5" />
             </label>
             <div class="review-grid">
               <label>
                 AI 推断标签
-                <input v-model="form.ai_inference_label" type="text" />
+                <input v-model="form.aiInferenceLabel" type="text" />
               </label>
               <label class="review-check">
-                <input v-model="form.ai_recursive" type="checkbox" />
+                <input v-model="form.aiRecursive" type="checkbox" />
                 AI 推断生成页面
               </label>
             </div>
             <label>
               AI 推断理由
-              <textarea v-model="form.ai_inference_reason" rows="4" />
+              <textarea v-model="form.aiInferenceReason" rows="4" />
             </label>
 
             <section class="action-review-editor">
@@ -435,7 +435,7 @@ async function saveEdit() {
                         </label>
                         <label>
                           触发方式
-                          <select v-model="item.action_type">
+                          <select v-model="item.actionType">
                             <option value="tap">点击</option>
                             <option value="long_press">长按</option>
                             <option value="swipe">滑动</option>
@@ -450,7 +450,7 @@ async function saveEdit() {
                         </label>
                         <label v-if="group.key === 'stateAction'">
                           状态值
-                          <input v-model="item.state_value" type="text" placeholder="例如：true / collected" />
+                          <input v-model="item.stateValue" type="text" placeholder="例如：true / collected" />
                         </label>
                       </div>
                       <label>
@@ -472,13 +472,13 @@ async function saveEdit() {
 
             <label>
               复核备注
-              <textarea v-model="form.review_note" rows="3" placeholder="记录为什么修改，便于后端审计" />
+              <textarea v-model="form.reviewNote" rows="3" placeholder="记录为什么修改，便于后端审计" />
             </label>
 
             <section class="image-editor">
               <div class="image-editor-head">
                 <strong>截图证据</strong>
-                <span>{{ form.image_urls.length }} 张</span>
+                <span>{{ form.imageUrls.length }} 张</span>
               </div>
               <div class="image-add-row">
                 <input
@@ -488,8 +488,8 @@ async function saveEdit() {
                   @change="handleNewImages"
                 />
               </div>
-              <div v-if="form.new_images.length" class="pending-image-list">
-                <div v-for="(file, index) in form.new_images" :key="`${file.name}-${file.size}`">
+              <div v-if="form.newImages.length" class="pending-image-list">
+                <div v-for="(file, index) in form.newImages" :key="`${file.name}-${file.size}`">
                   <span>{{ file.name }}</span>
                   <GraphButton danger @click="removeNewImage(index)">
                     <template #icon><Icon icon="ant-design:delete-outlined" :size="14" /></template>
@@ -497,11 +497,11 @@ async function saveEdit() {
                   </GraphButton>
                 </div>
               </div>
-              <div v-if="form.image_urls.length" class="editable-image-list">
-                <div v-for="(url, index) in form.image_urls" :key="url" class="editable-image-item">
+              <div v-if="form.imageUrls.length" class="editable-image-list">
+                <div v-for="(url, index) in form.imageUrls" :key="url" class="editable-image-item">
                   <SmartImage
                     :candidates="[buildImageApiUrl(url)]"
-                    :title="form.page_title"
+                    :title="form.pageTitle"
                     :kind="index === 0 ? '主截图' : `证据图 ${index + 1}`"
                   />
                   <div>
@@ -569,7 +569,7 @@ async function saveEdit() {
           </CardHeader>
 
           <CardContent class="replay-card-content">
-            <p class="ai-summary">{{ payload.page_text || "暂无 page_text" }}</p>
+            <p class="ai-summary">{{ payload.pageText || "暂无 pageText" }}</p>
 
             <section>
               <h4>AI 推理信息</h4>
@@ -615,7 +615,7 @@ async function saveEdit() {
                   <strong>状态动作</strong>
                   <span>不切页，只改变当前页面状态</span>
                   <em v-for="action in detail.analysis.stateActions" :key="action.id">
-                    {{ action.label }} · {{ action.state_key }}
+                    {{ action.label }} · {{ action.stateKey }}
                   </em>
                   <em v-if="!detail.analysis.stateActions.length">暂无</em>
                 </div>

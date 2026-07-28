@@ -92,12 +92,12 @@ const resolvedTestCases = computed(() => [
     ? generateMockScenarioCases(graph.value, 80, { appName: appName.value })
     : []),
   ...resolveTestCases(graph.value, [
-    ...getTestCaseCatalog(appName.value).filter((item) => item.case_type === "scenario"),
+    ...getTestCaseCatalog(appName.value).filter((item) => item.caseType === "scenario"),
     ...customScenarioCases.value
   ])
 ]);
 const activeTestCase = computed(() => (
-  resolvedTestCases.value.find((item) => item.case_id === selectedCaseId.value)
+  resolvedTestCases.value.find((item) => item.caseId === selectedCaseId.value)
   || resolvedTestCases.value[0]
   || null
 ));
@@ -111,7 +111,7 @@ async function loadInitialApps() {
       errorMessage.value = "暂无可查询应用";
       return;
     }
-    appName.value = appList.value[0].app_name;
+    appName.value = appList.value[0].appName;
     await loadGraph();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "应用列表加载失败";
@@ -166,20 +166,20 @@ function highlightOfficialFunction(payload) {
 
 function selectTestCase(caseId) {
   selectedCaseId.value = caseId;
-  const testCase = resolvedTestCases.value.find((item) => item.case_id === caseId);
+  const testCase = resolvedTestCases.value.find((item) => item.caseId === caseId);
   if (testCase?.startPage) selected.value = { type: "node", id: testCase.startPage.nodeId };
 }
 
 function createScenarioCase(testCase) {
   customScenarioCases.value = [...customScenarioCases.value, testCase];
-  selectedCaseId.value = testCase.case_id;
-  const startPage = graph.value.pageMap.get(testCase.start_page_id);
+  selectedCaseId.value = testCase.caseId;
+  const startPage = graph.value.pageMap.get(testCase.startPageId);
   if (startPage) selected.value = { type: "node", id: startPage.nodeId };
   createMessage.success("过程采集用例已创建");
 }
 
 function runTestCase(caseId) {
-  const testCase = resolvedTestCases.value.find((item) => item.case_id === caseId);
+  const testCase = resolvedTestCases.value.find((item) => item.caseId === caseId);
   if (!testCase?.resolved) return;
   stopCaseExecution();
   selectedCaseId.value = caseId;
@@ -266,13 +266,13 @@ async function handleToolAction(value) {
 
 async function createFloatingNode(payload = {}) {
   const request = payload?.request || payload;
-  if (!appName.value || !request.page_url || creatingOrphan.value) return;
+  if (!appName.value || !request.pageUrl || creatingOrphan.value) return;
   creatingOrphan.value = true;
   errorMessage.value = "";
   createMessage.loading({ content: "正在创建游离节点...", key: "app-graph-create-orphan", duration: 0 });
   try {
-    const response = await requestCreateOrphanNode(appName.value, request.page_url);
-    const existing = graph.value.pages.find((page) => page.pageId === response.node.page_id);
+    const response = await requestCreateOrphanNode(appName.value, request.pageUrl);
+    const existing = graph.value.pages.find((page) => page.pageId === response.node.pageId);
     if (existing) {
       selected.value = { type: "node", id: existing.nodeId };
       payload?.resolve?.(response);
@@ -302,7 +302,7 @@ async function exploreFloatingNode(nodeId) {
   try {
     const result = await requestAiExploreFloatingPage(page);
     const payload = result?.data || result?.result || result;
-    const canMerge = Boolean(payload?.can_merge ?? payload?.mergeable ?? payload?.suitable);
+    const canMerge = Boolean(payload?.canMerge ?? payload?.mergeable ?? payload?.suitable);
     floatingAiState.value = {
       ...floatingAiState.value,
       [nodeId]: {
@@ -382,11 +382,11 @@ async function manualMergeFloatingNode({ nodeId, targetParentId }) {
     };
   } catch (error) {
     const fallbackPayload = {
-      can_merge: true,
-      target_parent_node_id: targetParentId,
-      target_parent_id: targetParent.backendId,
-      widget_description: "人工拖拽归类",
-      ai_recursive: true,
+      canMerge: true,
+      targetParentNodeId: targetParentId,
+      targetParentId: targetParent.backendId,
+      widgetDescription: "人工拖拽归类",
+      aiRecursive: true,
       reason: error instanceof Error ? error.message : "manual merge fallback"
     };
     graph.value = mergeFloatingPageIntoGraph(graph.value, nodeId, fallbackPayload);
@@ -484,7 +484,7 @@ watch(workMode, (value) => {
     aiGraphHighlighted.value = false;
     selectedOfficialFunction.value = null;
     if (!selectedCaseId.value && resolvedTestCases.value.length) {
-      selectTestCase(resolvedTestCases.value[0].case_id);
+      selectTestCase(resolvedTestCases.value[0].caseId);
     }
     return;
   }
@@ -514,12 +514,12 @@ watch(workMode, (value) => {
             >
               <a-select-option
                 v-for="app in appList"
-                :key="app.app_name"
-                :value="app.app_name"
-                :label="app.app_name"
+                :key="app.appName"
+                :value="app.appName"
+                :label="app.appName"
               >
                 <span class="app-option-content">
-                  <span>{{ app.app_name }}</span>
+                  <span>{{ app.appName }}</span>
                   <a-tag color="blue">{{ app.count }} 节点</a-tag>
                 </span>
               </a-select-option>
@@ -571,7 +571,7 @@ watch(workMode, (value) => {
       :cases="resolvedTestCases"
       :execution="caseExecution"
       :pages="graph.pages.filter((page) => !page.isFloating)"
-      :selected-case-id="activeTestCase?.case_id || ''"
+      :selected-case-id="activeTestCase?.caseId || ''"
       @create-scenario="createScenarioCase"
       @select-case="selectTestCase"
     />

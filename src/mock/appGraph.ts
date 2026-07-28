@@ -2,10 +2,10 @@ type NodeRecord = Record<string, any>;
 
 const page = (id: string, title: string, text: string, url: string, children: NodeRecord[] = [], extra = {}) => ({
   id,
-  page_id: id,
-  page_title: title,
-  page_text: text,
-  page_url: url,
+  pageId: id,
+  pageTitle: title,
+  pageText: text,
+  pageUrl: url,
   images: [],
   action: {
     popupAction: [],
@@ -13,17 +13,17 @@ const page = (id: string, title: string, text: string, url: string, children: No
     externalAction: [],
     pageNaviAction: children.map((child) => ({
       id: `${id}-${child.id}`,
-      label: child.widget_description || `进入${child.page_title}`,
-      action_type: 'tap',
-      description: `从${title}进入${child.page_title}`,
-      target_page_id: child.page_id,
-      target_page_title: child.page_title,
+      label: child.widgetDescription || `进入${child.pageTitle}`,
+      actionType: 'tap',
+      description: `从${title}进入${child.pageTitle}`,
+      targetPageId: child.pageId,
+      targetPageTitle: child.pageTitle,
     })),
   },
-  page_info: { page_type: 'screen', review_status: 'reviewed' },
-  ai_inference: { label: '高置信页面', reason: '页面结构、文本语义与交互入口匹配。' },
-  ai_recursive: false,
-  widget_description: '点击功能入口',
+  pageInfo: { pageType: 'screen', reviewStatus: 'reviewed' },
+  aiInference: { label: '高置信页面', reason: '页面结构、文本语义与交互入口匹配。' },
+  aiRecursive: false,
+  widgetDescription: '点击功能入口',
   children,
   ...extra,
 });
@@ -67,18 +67,18 @@ function mockScreenshot(title: string, domain: string, color: string, index: num
 function refreshNavigationActions(node: NodeRecord) {
   node.action.pageNaviAction = (node.children || []).map((child: NodeRecord) => ({
     id: `${node.id}-${child.id}`,
-    label: child.widget_description || `进入${child.page_title}`,
-    action_type: 'tap',
-    description: `从${node.page_title}进入${child.page_title}`,
-    target_page_id: child.page_id,
-    target_page_title: child.page_title,
+    label: child.widgetDescription || `进入${child.pageTitle}`,
+    actionType: 'tap',
+    description: `从${node.pageTitle}进入${child.pageTitle}`,
+    targetPageId: child.pageId,
+    targetPageTitle: child.pageTitle,
   }));
   (node.children || []).forEach(refreshNavigationActions);
 }
 
 function buildQqDemoGraph() {
   const root = page('qq-home', 'QQ 首页', 'QQ 应用主入口，聚合消息、联系人、动态与服务功能。', 'mqq://home', [], {
-    page_info: { page_type: 'home', domain: 'home', review_status: 'confirmed' },
+    pageInfo: { pageType: 'home', domain: 'home', reviewStatus: 'confirmed' },
   });
   const byKey = new Map<string, NodeRecord>([['home', root]]);
   let sequence = 1;
@@ -107,9 +107,9 @@ function buildQqDemoGraph() {
         `mqq://${domainKey}/${localIndex + 1}`,
         [],
         {
-          widget_description: widget,
-          ai_recursive: localIndex > 0 && localIndex % 13 === 0,
-          page_info: { page_type: domainKey, domain: domainName, source: 'frontend_mock', review_status: 'confirmed' },
+          widgetDescription: widget,
+          aiRecursive: localIndex > 0 && localIndex % 13 === 0,
+          pageInfo: { pageType: domainKey, domain: domainName, source: 'frontend_mock', reviewStatus: 'confirmed' },
         },
       );
       node.images = [mockScreenshot(title, domainName, color, sequence)];
@@ -124,22 +124,22 @@ function buildQqDemoGraph() {
     mockScreenshot('QQ 消息', '首页', '#087ea4', 1),
     mockScreenshot('QQ 服务', '首页', '#4f46e5', 1),
   ];
-  root.action.popupAction.push({ id: 'qq-home-search', label: '打开搜索', action_type: 'tap', popup_name: '全局搜索面板', description: '首页顶部搜索入口' });
-  root.action.stateAction.push({ id: 'qq-home-dnd', label: '消息免打扰', action_type: 'tap', state_key: 'dnd_enabled', state_value: true, description: '切换消息提醒状态' });
-  root.action.externalAction.push({ id: 'qq-home-scan', label: '扫一扫', action_type: 'tap', target: 'system_camera', description: '调用系统相机扫码' });
+  root.action.popupAction.push({ id: 'qq-home-search', label: '打开搜索', actionType: 'tap', popupName: '全局搜索面板', description: '首页顶部搜索入口' });
+  root.action.stateAction.push({ id: 'qq-home-dnd', label: '消息免打扰', actionType: 'tap', stateKey: 'dndEnabled', stateValue: true, description: '切换消息提醒状态' });
+  root.action.externalAction.push({ id: 'qq-home-scan', label: '扫一扫', actionType: 'tap', target: 'system_camera', description: '调用系统相机扫码' });
   refreshNavigationActions(root);
 
   const orphanPages = Array.from({ length: 7 }, (_, index) => {
     const title = `待探索页面 ${index + 1}`;
     const node = page(`orphan-${index + 1}`, title, '由线上 URL 或 AI 探索发现，当前尚未确认其稳定父节点。', `mqq://uncovered/${index + 1}`, [], {
       images: [mockScreenshot(title, '游离 URL', '#b7791f', 294 + index)],
-      ai_recursive: true,
-      page_info: { page_type: 'orphan', domain: '游离 URL', is_orphan: true, source: 'frontend_mock', review_status: 'pending' },
-      ai_inference: { label: 'AI 推断页面', reason: '线上 URL 已发现，但尚未确认稳定父节点。' },
+      aiRecursive: true,
+      pageInfo: { pageType: 'orphan', domain: '游离 URL', isOrphan: true, source: 'frontend_mock', reviewStatus: 'pending' },
+      aiInference: { label: 'AI 推断页面', reason: '线上 URL 已发现，但尚未确认稳定父节点。' },
     });
     return node;
   });
-  return { roots: [root], orphan_pages: orphanPages };
+  return { roots: [root], orphanPages: orphanPages };
 }
 
 const wechatRoot = page('wx-home', '微信首页', '展示最近会话、未读消息和搜索入口。', 'weixin://home', [
@@ -152,9 +152,9 @@ const wechatRoot = page('wx-home', '微信首页', '展示最近会话、未读�
   page('wx-me', '我的', '展示支付、收藏、朋友圈和个人设置入口。', 'weixin://me'),
 ]);
 
-const store: Record<string, { roots: NodeRecord[]; orphan_pages: NodeRecord[] }> = {
+const store: Record<string, { roots: NodeRecord[]; orphanPages: NodeRecord[] }> = {
   QQ: buildQqDemoGraph(),
-  微信: { roots: [wechatRoot], orphan_pages: [] },
+  微信: { roots: [wechatRoot], orphanPages: [] },
 };
 
 const wait = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -172,15 +172,15 @@ function findNode(appName: string, pageId: string) {
   let result: NodeRecord | null = null;
   const graph = store[appName];
   if (!graph) return null;
-  walk([...graph.roots, ...graph.orphan_pages], (node) => {
-    if (node.page_id === pageId) result = node;
+  walk([...graph.roots, ...graph.orphanPages], (node) => {
+    if (node.pageId === pageId) result = node;
     return Boolean(result);
   });
   return result;
 }
 
 function removeNode(nodes: NodeRecord[], pageId: string): NodeRecord | null {
-  const index = nodes.findIndex((node) => node.page_id === pageId);
+  const index = nodes.findIndex((node) => node.pageId === pageId);
   if (index >= 0) return nodes.splice(index, 1)[0];
   for (const node of nodes) {
     const found = removeNode(node.children || [], pageId);
@@ -191,15 +191,15 @@ function removeNode(nodes: NodeRecord[], pageId: string): NodeRecord | null {
 
 export async function mockAppList() {
   await wait(260);
-  return Object.entries(store).map(([app_name, graph]) => ({
-    app_name,
-    count: countNodes([...graph.roots, ...graph.orphan_pages]),
+  return Object.entries(store).map(([appName, graph]) => ({
+    appName,
+    count: countNodes([...graph.roots, ...graph.orphanPages]),
   }));
 }
 
 export async function mockQueryGraph(appName: string) {
   await wait(350);
-  return clone(store[appName] || { roots: [], orphan_pages: [] });
+  return clone(store[appName] || { roots: [], orphanPages: [] });
 }
 
 export async function mockCreateOrphan(appName: string, pageUrl: string) {
@@ -207,18 +207,18 @@ export async function mockCreateOrphan(appName: string, pageUrl: string) {
   const graph = store[appName];
   if (!graph) throw new Error(`应用 ${appName} 不存在`);
   let existing: NodeRecord | null = null;
-  walk([...graph.roots, ...graph.orphan_pages], (node) => {
-    if (node.page_url === pageUrl) existing = node;
+  walk([...graph.roots, ...graph.orphanPages], (node) => {
+    if (node.pageUrl === pageUrl) existing = node;
     return Boolean(existing);
   });
-  if (existing) return { statue: 'success', created: false, node: clone(existing) };
+  if (existing) return { status: 'success', created: false, node: clone(existing) };
   const id = `orphan-${Date.now()}`;
   const node = page(id, '待探索页面', '人工创建的游离 URL 页面，等待 AI 探索和截图识别。', pageUrl, [], {
-    page_info: { page_type: 'orphan', is_orphan: true, review_status: 'draft' },
-    ai_inference: { label: '待探索', reason: '该 URL 尚未归入主图谱。' },
+    pageInfo: { pageType: 'orphan', isOrphan: true, reviewStatus: 'draft' },
+    aiInference: { label: '待探索', reason: '该 URL 尚未归入主图谱。' },
   });
-  graph.orphan_pages.push(node);
-  return { statue: 'success', created: true, node: clone(node) };
+  graph.orphanPages.push(node);
+  return { status: 'success', created: true, node: clone(node) };
 }
 
 export async function mockMoveNode(pageId: string, parentId: string) {
@@ -226,11 +226,11 @@ export async function mockMoveNode(pageId: string, parentId: string) {
   for (const graph of Object.values(store)) {
     const target = findInGraph(graph, parentId);
     if (!target) continue;
-    const moved = removeNode(graph.roots, pageId) || removeNode(graph.orphan_pages, pageId);
+    const moved = removeNode(graph.roots, pageId) || removeNode(graph.orphanPages, pageId);
     if (!moved) throw new Error('待移动节点不存在');
     target.children ||= [];
     target.children.push(moved);
-    return { statue: 'success', moved: true, page_id: pageId, new_parent_id: parentId };
+    return { status: 'success', moved: true, pageId, newParentId: parentId };
   }
   throw new Error('目标父节点不存在');
 }
@@ -238,8 +238,8 @@ export async function mockMoveNode(pageId: string, parentId: string) {
 export async function mockDeleteNode(pageId: string) {
   await wait(600);
   for (const graph of Object.values(store)) {
-    if (deleteNodeOnly(graph.roots, pageId) || deleteNodeOnly(graph.orphan_pages, pageId)) {
-      return { statue: 'success', deleted: true, page_id: pageId };
+    if (deleteNodeOnly(graph.roots, pageId) || deleteNodeOnly(graph.orphanPages, pageId)) {
+      return { status: 'success', deleted: true, pageId };
     }
   }
   throw new Error('待删除节点不存在');
@@ -247,36 +247,36 @@ export async function mockDeleteNode(pageId: string) {
 
 export async function mockUpdateNode(formData: FormData) {
   await wait(600);
-  const pageId = String(formData.get('page_id') || '');
+  const pageId = String(formData.get('pageId') || '');
   let node: NodeRecord | null = null;
   for (const appName of Object.keys(store)) node ||= findNode(appName, pageId);
   if (!node) throw new Error('页面不存在');
-  node.page_title = String(formData.get('page_title') || node.page_title);
-  node.page_text = String(formData.get('page_text') || '');
-  node.page_url = String(formData.get('page_url') || '');
-  node.widget_description = String(formData.get('widget_description') || '');
-  node.ai_recursive = String(formData.get('ai_recursive')) === 'true';
-  node.ai_inference = JSON.parse(String(formData.get('ai_inference') || '{}'));
+  node.pageTitle = String(formData.get('pageTitle') || node.pageTitle);
+  node.pageText = String(formData.get('pageText') || '');
+  node.pageUrl = String(formData.get('pageUrl') || '');
+  node.widgetDescription = String(formData.get('widgetDescription') || '');
+  node.aiRecursive = String(formData.get('aiRecursive')) === 'true';
+  node.aiInference = JSON.parse(String(formData.get('aiInference') || '{}'));
   node.action = JSON.parse(String(formData.get('action') || '{}'));
-  return { statue: 'success', node: clone(node) };
+  return { status: 'success', node: clone(node) };
 }
 
 export async function mockExplore(pageRecord: NodeRecord) {
   await wait(850);
-  return { can_merge: true, target_parent_node_id: 'page-settings-01', target_parent_id: 'settings-01', reason: 'AI 根据 URL 和页面语义推断该页面属于设置与安全分支。' };
+  return { canMerge: true, targetParentNodeId: 'page-settings-01', targetParentId: 'settings-01', reason: 'AI 根据 URL 和页面语义推断该页面属于设置与安全分支。' };
 }
 
-function findInGraph(graph: { roots: NodeRecord[]; orphan_pages: NodeRecord[] }, id: string) {
+function findInGraph(graph: { roots: NodeRecord[]; orphanPages: NodeRecord[] }, id: string) {
   let result: NodeRecord | null = null;
-  walk([...graph.roots, ...graph.orphan_pages], (node) => {
-    if (node.page_id === id) result = node;
+  walk([...graph.roots, ...graph.orphanPages], (node) => {
+    if (node.pageId === id) result = node;
     return Boolean(result);
   });
   return result;
 }
 
 function deleteNodeOnly(nodes: NodeRecord[], pageId: string): boolean {
-  const index = nodes.findIndex((node) => node.page_id === pageId);
+  const index = nodes.findIndex((node) => node.pageId === pageId);
   if (index >= 0) {
     const [deleted] = nodes.splice(index, 1);
     nodes.splice(index, 0, ...(deleted.children || []));

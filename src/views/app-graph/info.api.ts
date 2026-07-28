@@ -20,12 +20,12 @@ const rawRequestOptions = {
 };
 
 enum Api {
-  AppList = '/app_list',
-  CreateOrphanNode = '/create_orphan_node',
-  DeleteNode = '/delete_node',
-  MoveNode = '/move_node',
+  AppList = '/appList',
+  CreateOrphanNode = '/createOrphanNode',
+  DeleteNode = '/deleteNode',
+  MoveNode = '/moveNode',
   QueryAppGraph = '/queryAppGraph',
-  UpdateNode = '/update_node',
+  UpdateNode = '/updateNode',
 }
 
 export function buildImageApiUrl(imageUrl: string) {
@@ -43,7 +43,7 @@ export const queryAppGraph = (appName: string) =>
 export async function queryAppList() {
   if (USE_MOCK) return mockAppList();
   const payload = await defHttp.get<any>({ url: Api.AppList }, rawRequestOptions);
-  if (payload?.statue !== 'success' || !Array.isArray(payload?.apps)) {
+  if (payload?.status !== 'success' || !Array.isArray(payload?.apps)) {
     throw new Error('App list response is invalid');
   }
   return payload.apps;
@@ -54,18 +54,18 @@ export async function requestCreateOrphanNode(appName: string, pageUrl: string) 
   const payload = await defHttp.post<any>(
     {
       url: Api.CreateOrphanNode,
-      data: { app_name: appName, page_url: pageUrl },
+      data: { appName, pageUrl },
     },
     rawRequestOptions,
   );
-  if (payload?.statue !== 'success' || !payload?.node) {
+  if (payload?.status !== 'success' || !payload?.node) {
     throw new Error('Create orphan node response is invalid');
   }
   return payload;
 }
 
 export function requestDeleteNode(page: any) {
-  if (!page?.pageId) throw new Error('当前节点缺少后台 page_id');
+  if (!page?.pageId) throw new Error('当前节点缺少后台 pageId');
   if (USE_MOCK) return mockDeleteNode(page.pageId);
   return defHttp.post<any>(
     {
@@ -81,16 +81,14 @@ export const requestAiExploreFloatingPage = (page: any) =>
     [
       '/ai/exploreFloatingPage',
       '/api/ai/exploreFloatingPage',
-      '/ai/explore-floating-page',
-      '/api/ai/explore-floating-page',
     ],
     {
       id: page.backendId,
-      page_title: page.page_title,
-      page_text: page.page_text,
-      image_url: page.image_url,
-      page_url: page.page_url,
-      page_info: page.page_info,
+      pageTitle: page.pageTitle,
+      pageText: page.pageText,
+      imageUrl: page.imageUrl,
+      pageUrl: page.pageUrl,
+      pageInfo: page.pageInfo,
     },
     'AI explore',
   );
@@ -100,13 +98,11 @@ export const requestMergeFloatingPage = (page: any, exploration: any) =>
     [
       '/ai/mergeFloatingPage',
       '/api/ai/mergeFloatingPage',
-      '/ai/merge-floating-page',
-      '/api/ai/merge-floating-page',
     ],
     {
       id: page.backendId,
-      node_id: page.nodeId,
-      page_url: page.page_url,
+      nodeId: page.nodeId,
+      pageUrl: page.pageUrl,
       exploration,
     },
     'Merge floating page',
@@ -118,63 +114,61 @@ export const requestManualMergeFloatingPage = (
   options: Record<string, string> = {},
 ) =>
   USE_MOCK ? mockMoveNode(page.pageId, targetParent.pageId).then(() => ({
-    can_merge: true,
-    target_parent_node_id: targetParent.nodeId,
-    target_parent_id: targetParent.backendId,
-    widget_description: options.widget_description || '人工拖拽归类',
+    canMerge: true,
+    targetParentNodeId: targetParent.nodeId,
+    targetParentId: targetParent.backendId,
+    widgetDescription: options.widgetDescription || '人工拖拽归类',
   })) : postToFirstAvailable(
     [
       '/ai/manualMergeFloatingPage',
       '/api/ai/manualMergeFloatingPage',
-      '/ai/manual-merge-floating-page',
-      '/api/ai/manual-merge-floating-page',
     ],
     {
       id: page.backendId,
-      node_id: page.nodeId,
-      page_title: page.page_title,
-      page_text: page.page_text,
-      page_url: page.page_url,
-      image_url: page.image_url,
-      target_parent_id: targetParent?.backendId ?? null,
-      target_parent_node_id: targetParent?.nodeId || '',
-      widget_description: options.widget_description || '人工拖拽归类',
-      operator_note: options.operator_note || '人工拖拽游离页面到主图谱',
+      nodeId: page.nodeId,
+      pageTitle: page.pageTitle,
+      pageText: page.pageText,
+      pageUrl: page.pageUrl,
+      imageUrl: page.imageUrl,
+      targetParentId: targetParent?.backendId ?? null,
+      targetParentNodeId: targetParent?.nodeId || '',
+      widgetDescription: options.widgetDescription || '人工拖拽归类',
+      operatorNote: options.operatorNote || '人工拖拽游离页面到主图谱',
     },
     'Manual merge floating page',
   );
 
 export function requestMoveNode(page: any, targetParent: any) {
-  if (!page?.pageId) throw new Error('当前节点缺少后台 page_id');
-  if (!targetParent?.pageId) throw new Error('目标父节点缺少后台 page_id');
+  if (!page?.pageId) throw new Error('当前节点缺少后台 pageId');
+  if (!targetParent?.pageId) throw new Error('目标父节点缺少后台 pageId');
   if (USE_MOCK) return mockMoveNode(page.pageId, targetParent.pageId);
   return defHttp.post<any>(
     {
       url: Api.MoveNode,
-      data: { page_id: page.pageId, new_parent_id: targetParent.pageId },
+      data: { pageId: page.pageId, newParentId: targetParent.pageId },
     },
     rawRequestOptions,
   );
 }
 
 export function requestSavePageReview(page: any, review: any) {
-  if (!page?.pageId) throw new Error('Missing backend page_id');
+  if (!page?.pageId) throw new Error('Missing backend pageId');
   const formData = new FormData();
-  formData.append('page_id', page.pageId);
-  formData.append('page_title', review.page_title);
-  formData.append('page_text', review.page_text || '');
-  formData.append('page_url', review.page_url || '');
-  formData.append('widget_description', review.widget_description || '');
-  formData.append('keep_images', JSON.stringify(review.keep_images || []));
-  formData.append('ai_inference', JSON.stringify(review.ai_inference || {}));
+  formData.append('pageId', page.pageId);
+  formData.append('pageTitle', review.pageTitle);
+  formData.append('pageText', review.pageText || '');
+  formData.append('pageUrl', review.pageUrl || '');
+  formData.append('widgetDescription', review.widgetDescription || '');
+  formData.append('keepImages', JSON.stringify(review.keepImages || []));
+  formData.append('aiInference', JSON.stringify(review.aiInference || {}));
   formData.append('action', JSON.stringify(review.action || {
     popupAction: [],
     stateAction: [],
     externalAction: [],
     pageNaviAction: [],
   }));
-  formData.append('ai_recursive', String(Boolean(review.ai_recursive)));
-  (review.new_images || []).forEach((file: File) => formData.append('new_images', file));
+  formData.append('aiRecursive', String(Boolean(review.aiRecursive)));
+  (review.newImages || []).forEach((file: File) => formData.append('newImages', file));
 
   if (USE_MOCK) return mockUpdateNode(formData);
   return defHttp.post<any>(

@@ -16,20 +16,20 @@ const functionsWithCoverage = computed(() => {
   const functions = props.catalog.functions || [];
   const childrenMap = new Map();
   functions.forEach((item) => {
-    if (!childrenMap.has(item.parent_id)) childrenMap.set(item.parent_id, []);
-    childrenMap.get(item.parent_id).push(item);
+    if (!childrenMap.has(item.parentId)) childrenMap.set(item.parentId, []);
+    childrenMap.get(item.parentId).push(item);
   });
 
   const decorate = (item) => {
     const matchedPages = matchFunctionPages(item);
-    const confirmedPages = matchedPages.filter((page) => !page.ai_recursive);
+    const confirmedPages = matchedPages.filter((page) => !page.aiRecursive);
     const status = getCoverageStatus(item, matchedPages, confirmedPages);
     return {
       ...item,
       matchedPages,
       matchedPageIds: matchedPages.map((page) => page.nodeId),
       coverageStatus: status,
-      children: (childrenMap.get(item.function_id) || []).map(decorate),
+      children: (childrenMap.get(item.functionId) || []).map(decorate),
     };
   };
 
@@ -41,7 +41,7 @@ const flatRows = computed(() => {
   const append = (items) => {
     items.forEach((item) => {
       rows.push(item);
-      if (!collapsed.value.has(item.function_id)) append(item.children);
+      if (!collapsed.value.has(item.functionId)) append(item.children);
     });
   };
   append(functionsWithCoverage.value);
@@ -70,46 +70,46 @@ watch(() => props.catalog, () => {
 
 function pageSearchText(page) {
   return [
-    page.page_title,
+    page.pageTitle,
     page.displayTitle,
-    page.page_text,
-    page.page_url,
-    page.page_info?.domain,
+    page.pageText,
+    page.pageUrl,
+    page.pageInfo?.domain,
   ].join(' ').toLowerCase();
 }
 
 function matchFunctionPages(item) {
-  const keywords = (item.match_rules?.keywords || []).map((value) => value.toLowerCase());
-  const urls = (item.match_rules?.urls || []).map((value) => value.toLowerCase());
+  const keywords = (item.matchRules?.keywords || []).map((value) => value.toLowerCase());
+  const urls = (item.matchRules?.urls || []).map((value) => value.toLowerCase());
   return props.graph.pages.filter((page) => {
     const text = pageSearchText(page);
     return keywords.some((keyword) => text.includes(keyword))
-      || urls.some((keyword) => String(page.page_url || '').toLowerCase().includes(keyword));
+      || urls.some((keyword) => String(page.pageUrl || '').toLowerCase().includes(keyword));
   });
 }
 
 function getCoverageStatus(item, matchedPages, confirmedPages) {
-  if (!matchedPages.length && item.automation_limited) {
+  if (!matchedPages.length && item.automationLimited) {
     return { key: 'limited', label: '自动化受限' };
   }
   if (!matchedPages.length) return { key: 'uncovered', label: '未发现' };
   if (!confirmedPages.length) return { key: 'pending', label: '待确认' };
-  if (matchedPages.length < (item.expected_pages || 1)) return { key: 'partial', label: '部分覆盖' };
+  if (matchedPages.length < (item.expectedPages || 1)) return { key: 'partial', label: '部分覆盖' };
   return { key: 'covered', label: '已覆盖' };
 }
 
 function toggle(item) {
   if (!item.children.length) return;
   const next = new Set(collapsed.value);
-  if (next.has(item.function_id)) next.delete(item.function_id);
-  else next.add(item.function_id);
+  if (next.has(item.functionId)) next.delete(item.functionId);
+  else next.add(item.functionId);
   collapsed.value = next;
 }
 
 function selectFunction(item) {
   emit('highlight-function', {
-    functionId: item.function_id,
-    functionName: item.function_name,
+    functionId: item.functionId,
+    functionName: item.functionName,
     pageIds: item.matchedPageIds,
   });
 }
@@ -154,23 +154,23 @@ function clearSelection() {
     <div v-else class="function-tree-table">
       <button
         v-for="item in flatRows"
-        :key="item.function_id"
+        :key="item.functionId"
         type="button"
         class="function-tree-row"
-        :class="{ active: selectedFunctionId === item.function_id }"
+        :class="{ active: selectedFunctionId === item.functionId }"
         @click="selectFunction(item)"
       >
         <span class="function-main" :style="{ '--function-indent': `${(item.level - 1) * 16}px` }">
           <span class="function-toggle" @click.stop="toggle(item)">
             <Icon
               v-if="item.children.length"
-              :icon="collapsed.has(item.function_id) ? 'ant-design:plus-outlined' : 'ant-design:minus-outlined'"
+              :icon="collapsed.has(item.functionId) ? 'ant-design:plus-outlined' : 'ant-design:minus-outlined'"
               :size="11"
             />
           </span>
           <span>
-            <strong>{{ item.function_name }}</strong>
-            <em>{{ item.function_description }}</em>
+            <strong>{{ item.functionName }}</strong>
+            <em>{{ item.functionDescription }}</em>
           </span>
         </span>
         <span class="function-page-count">{{ item.matchedPages.length }}</span>

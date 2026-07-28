@@ -1,36 +1,36 @@
 export function normalizeImageUrls(page = {}) {
   const rawList = [
-    page.image_url,
-    ...(Array.isArray(page.image_urls) ? page.image_urls : []),
+    page.imageUrl,
+    ...(Array.isArray(page.imageUrls) ? page.imageUrls : []),
     ...(Array.isArray(page.images) ? page.images : []),
-    ...(Array.isArray(page.page_info?.image_urls) ? page.page_info.image_urls : [])
+    ...(Array.isArray(page.pageInfo?.imageUrls) ? page.pageInfo.imageUrls : [])
   ];
   return [...new Set(rawList.map((item) => String(item || "").trim()).filter(Boolean))];
 }
 export function applyPageReviewToGraph(graph, nodeId, review = {}) {
   const pages = graph.pages.map((page) => {
     if (page.nodeId !== nodeId) return page;
-    const imageUrls = normalizeImageUrls({ images: review.images || review.image_urls || [] });
-    const pageTitle = review.page_title ?? page.page_title;
+    const imageUrls = normalizeImageUrls({ images: review.images || review.imageUrls || [] });
+    const pageTitle = review.pageTitle ?? page.pageTitle;
     return {
       ...page,
-      page_title: pageTitle,
+      pageTitle,
       displayTitle: page.titleRepeatIndex > 1 ? `${pageTitle} #${page.titleRepeatIndex}` : pageTitle,
-      page_text: review.page_text ?? page.page_text,
-      page_url: review.page_url ?? page.page_url,
+      pageText: review.pageText ?? page.pageText,
+      pageUrl: review.pageUrl ?? page.pageUrl,
       images: imageUrls,
-      image_url: imageUrls[0] || "",
-      image_urls: imageUrls,
-      ai_recursive: Boolean(review.ai_recursive ?? page.ai_recursive),
-      widget_description: review.widget_description ?? page.widget_description,
+      imageUrl: imageUrls[0] || "",
+      imageUrls,
+      aiRecursive: Boolean(review.aiRecursive ?? page.aiRecursive),
+      widgetDescription: review.widgetDescription ?? page.widgetDescription,
       aiInference: {
         ...page.aiInference,
-        ...(review.ai_inference || {})
+        ...(review.aiInference || {})
       },
       action: normalizePageAction({ action: review.action ?? page.action }),
       pageActions: flattenPageAction(normalizePageAction({ action: review.action ?? page.action })),
-      review_status: review.review_status || "edited",
-      review_note: review.review_note || ""
+      reviewStatus: review.reviewStatus || "edited",
+      reviewNote: review.reviewNote || ""
     };
   });
   return rebuildGraphIndexes({ ...graph, pages });
@@ -47,8 +47,8 @@ export function normalizeBackendGraph(payload) {
   function walk(rawNode, parentId = null, depth = 1, siblingIndex = 0, path = [], isFloating = false) {
     if (!rawNode || typeof rawNode !== "object") return null;
 
-    const rawTitle = String(rawNode.page_title || "Unnamed Page");
-    const pageText = String(rawNode.page_text || "");
+    const rawTitle = String(rawNode.pageTitle || "Unnamed Page");
+    const pageText = String(rawNode.pageText || "");
     const stableId = makeNodeId(rawNode, pageText, [...path, siblingIndex]);
     const pathKey = [...path, stableId, siblingIndex].join("/");
 
@@ -62,16 +62,16 @@ export function normalizeBackendGraph(payload) {
     const node = {
       nodeId: stableId,
       backendId: rawNode.id ?? null,
-      pageId: rawNode.page_id || "",
-      page_title: rawTitle,
-      page_text: pageText,
+      pageId: rawNode.pageId || "",
+      pageTitle: rawTitle,
+      pageText,
       images: normalizeImageUrls(rawNode),
-      image_url: normalizeImageUrls(rawNode)[0] || "",
-      image_urls: normalizeImageUrls(rawNode),
-      page_url: rawNode.page_url || "",
-      page_info: rawNode.page_info || {},
-      widget_description: getWidgetDescription(rawNode),
-      ai_recursive: Boolean(rawNode.ai_recursive ?? rawNode.page_info?.ai_recursive),
+      imageUrl: normalizeImageUrls(rawNode)[0] || "",
+      imageUrls: normalizeImageUrls(rawNode),
+      pageUrl: rawNode.pageUrl || "",
+      pageInfo: rawNode.pageInfo || {},
+      widgetDescription: getWidgetDescription(rawNode),
+      aiRecursive: Boolean(rawNode.aiRecursive ?? rawNode.pageInfo?.aiRecursive),
       children: Array.isArray(rawNode.children) ? rawNode.children : [],
       action,
       pageActions: flattenPageAction(action),
@@ -80,7 +80,7 @@ export function normalizeBackendGraph(payload) {
       level: depth,
       parentId,
       isFloating,
-      aiInference: Object.keys(rawNode.ai_inference || {}).length ? rawNode.ai_inference : inferFloatingPage(rawNode),
+      aiInference: Object.keys(rawNode.aiInference || {}).length ? rawNode.aiInference : inferFloatingPage(rawNode),
       raw: rawNode
     };
     pages.push(node);
@@ -92,8 +92,8 @@ export function normalizeBackendGraph(payload) {
         from: parentId,
         to: stableId,
         label: widgetDescription || "进入",
-        action_type: "navigate",
-        widget_description: widgetDescription
+        actionType: "navigate",
+      widgetDescription
       });
     }
 
@@ -147,8 +147,8 @@ export function mergeFloatingPageIntoGraph(graph, nodeId, mergeInfo = {}) {
       isFloating: false,
       parentId,
       level: parent ? parent.level + 1 : 1,
-      ai_recursive: Boolean(mergeInfo.ai_recursive ?? true),
-      widget_description: mergeInfo.widget_description || mergeInfo.widgth_descirption || item.widget_description || "AI 探索并入"
+      aiRecursive: Boolean(mergeInfo.aiRecursive ?? true),
+      widgetDescription: mergeInfo.widgetDescription || item.widgetDescription || "AI 探索并入"
     };
   });
   const edges = parentId
@@ -158,9 +158,9 @@ export function mergeFloatingPageIntoGraph(graph, nodeId, mergeInfo = {}) {
           id: `${parentId}__${nodeId}`,
           from: parentId,
           to: nodeId,
-          label: mergeInfo.widget_description || mergeInfo.widgth_descirption || "AI 探索并入",
-          action_type: "navigate",
-          widget_description: mergeInfo.widget_description || mergeInfo.widgth_descirption || "AI 探索并入"
+          label: mergeInfo.widgetDescription || "AI 探索并入",
+          actionType: "navigate",
+          widgetDescription: mergeInfo.widgetDescription || "AI 探索并入"
         }
       ]
     : graph.edges;
@@ -175,15 +175,15 @@ export function moveGraphNode(graph, nodeId, targetParentId, moveInfo = {}) {
   if (!page || !targetParent || page.isFloating || targetParent.isFloating) return graph;
   if (isDescendantOf(graph, targetParentId, nodeId)) return graph;
 
-  const widgetDescription = moveInfo.widget_description || page.widget_description || "人工调整归类";
+  const widgetDescription = moveInfo.widgetDescription || page.widgetDescription || "人工调整归类";
   const pages = graph.pages.map((item) => {
     if (item.nodeId !== nodeId) return item;
     return {
       ...item,
       parentId: targetParentId,
-      widget_description: widgetDescription,
-      manual_reviewed: true,
-      review_note: moveInfo.reason || "人工编辑树结构"
+      widgetDescription,
+      manualReviewed: true,
+      reviewNote: moveInfo.reason || "人工编辑树结构"
     };
   });
   const edges = [
@@ -193,8 +193,8 @@ export function moveGraphNode(graph, nodeId, targetParentId, moveInfo = {}) {
       from: targetParentId,
       to: nodeId,
       label: widgetDescription,
-      action_type: "navigate",
-      widget_description: widgetDescription,
+      actionType: "navigate",
+      widgetDescription,
       source: "manual_edit"
     }
   ];
@@ -204,25 +204,25 @@ export function moveGraphNode(graph, nodeId, targetParentId, moveInfo = {}) {
 
 export function addFloatingPageToGraph(graph, rawNode = {}) {
   const sequence = graph.floatingPages.length + 1;
-  const source = typeof rawNode === "string" ? { page_url: rawNode } : rawNode;
+  const source = typeof rawNode === "string" ? { pageUrl: rawNode } : rawNode;
   const nodeId = source.id ? `page-${source.id}` : `floating-draft-${Date.now()}`;
-  const normalizedUrl = String(source.page_url || "").trim();
+  const normalizedUrl = String(source.pageUrl || "").trim();
   const imageUrls = normalizeImageUrls(source);
-  const pageTitle = source.page_title || `待完善页面 ${sequence}`;
+  const pageTitle = source.pageTitle || `待完善页面 ${sequence}`;
   const page = {
     nodeId,
     backendId: source.id ?? null,
-    pageId: source.page_id || "",
-    page_title: pageTitle,
+    pageId: source.pageId || "",
+    pageTitle,
     displayTitle: pageTitle,
-    page_text: source.page_text || "人工创建的游离 URL 页面，等待补充识别结果。",
-    page_url: normalizedUrl,
+    pageText: source.pageText || "人工创建的游离 URL 页面，等待补充识别结果。",
+    pageUrl: normalizedUrl,
     images: imageUrls,
-    image_url: imageUrls[0] || "",
-    image_urls: imageUrls,
-    page_info: source.page_info || { source: "manual", review_status: "draft", is_orphan: true },
-    widget_description: "",
-    ai_recursive: Boolean(source.ai_recursive),
+    imageUrl: imageUrls[0] || "",
+    imageUrls,
+    pageInfo: source.pageInfo || { source: "manual", reviewStatus: "draft", isOrphan: true },
+    widgetDescription: "",
+    aiRecursive: Boolean(source.aiRecursive),
     children: [],
     action: createEmptyAction(),
     pageActions: [],
@@ -230,8 +230,8 @@ export function addFloatingPageToGraph(graph, rawNode = {}) {
     level: 1,
     parentId: null,
     isFloating: true,
-    aiInference: source.ai_inference || { label: "待人工补充", reason: "新建游离页面，尚未执行 AI 探索。" },
-    review_status: "draft",
+    aiInference: source.aiInference || { label: "待人工补充", reason: "新建游离页面，尚未执行 AI 探索。" },
+    reviewStatus: "draft",
     raw: {}
   };
   return rebuildGraphIndexes({ ...graph, pages: [...graph.pages, page] });
@@ -308,8 +308,8 @@ export function getAncestorPath(graph, nodeId) {
 }
 
 export function getPageCategory(page) {
-  const info = page?.page_info || {};
-  const type = info.page_type || info.type || info.category || "page";
+  const info = page?.pageInfo || {};
+  const type = info.pageType || info.type || info.category || "page";
   return {
     label: String(type),
     tone: pickTone(String(type))
@@ -318,7 +318,7 @@ export function getPageCategory(page) {
 
 export function groupPageActions(actions = []) {
   return actions.reduce((groups, action) => {
-    const key = action.effect_type || "unknown";
+    const key = action.effectType || "unknown";
     if (!groups[key]) groups[key] = [];
     groups[key].push(action);
     return groups;
@@ -337,7 +337,7 @@ export function createEmptyAction() {
 }
 
 export function normalizePageAction(rawNode = {}) {
-  const source = rawNode.action ?? rawNode.page_actions ?? rawNode.pageActions;
+  const source = rawNode.action ?? rawNode.pageActions;
   if (source && !Array.isArray(source) && typeof source === "object") {
     return Object.fromEntries(ACTION_GROUPS.map(({ key, effectType }) => [
       key,
@@ -347,7 +347,7 @@ export function normalizePageAction(rawNode = {}) {
 
   const grouped = createEmptyAction();
   extractPageActions(rawNode).forEach((item) => {
-    const group = ACTION_GROUPS.find(({ effectType }) => effectType === item.effect_type);
+    const group = ACTION_GROUPS.find(({ effectType }) => effectType === item.effectType);
     if (group) grouped[group.key].push(item);
   });
   return grouped;
@@ -377,7 +377,7 @@ function pickTone(value) {
 }
 
 function extractPageActions(rawNode) {
-  const info = rawNode.page_info || {};
+  const info = rawNode.pageInfo || {};
   const candidates = [
     ...asArray(rawNode.actions),
     ...asArray(rawNode.controls),
@@ -390,7 +390,7 @@ function extractPageActions(rawNode) {
 
   return candidates
     .map((item, index) => normalizeAction(item, index))
-    .filter((action) => action.effect_type !== "navigate");
+    .filter((action) => action.effectType !== "navigate");
 }
 
 function normalizeAction(item, index, forcedEffectType = "") {
@@ -399,32 +399,31 @@ function normalizeAction(item, index, forcedEffectType = "") {
     item.label ||
     item.text ||
     item.name ||
-    item.semantic_name ||
     item.semanticName ||
-    item.function_desc ||
+    item.functionDesc ||
     `action-${index + 1}`
   );
-  const rawType = String(item.effect_type || item.effectType || item.action_effect || item.type || "").toLowerCase();
+  const rawType = String(item.effectType || item.actionEffect || item.type || "").toLowerCase();
   const effectType = forcedEffectType || inferEffectType(label, rawType, item);
 
   const normalized = {
     ...source,
-    id: item.id || item.widget_id || item.key || `action-${index + 1}`,
+    id: item.id || item.widgetId || item.key || `action-${index + 1}`,
     label,
-    action_type: item.action_type || item.actionType || "tap",
-    effect_type: effectType,
+    actionType: item.actionType || "tap",
+    effectType,
     confidence: item.confidence ?? null,
-    description: item.description || item.reason || item.function_desc || ""
+    description: item.description || item.reason || item.functionDesc || ""
   };
   if (effectType === "state_change") {
-    normalized.state_key = item.state_key || item.stateKey || inferStateKey(label);
-    normalized.state_value = item.state_value ?? item.stateValue ?? null;
+    normalized.stateKey = item.stateKey || inferStateKey(label);
+    normalized.stateValue = item.stateValue ?? null;
   }
   return normalized;
 }
 
 function inferEffectType(label, rawType, item) {
-  if (/navigate|jump|link|page|route/.test(rawType) || item.target_page || item.targetPage) return "navigate";
+  if (/navigate|jump|link|page|route/.test(rawType) || item.targetPage) return "navigate";
   if (/overlay|modal|sheet|dialog|popup|弹层|浮层|面板/.test(rawType + label)) return "overlay";
   if (/external|system|share|camera|album|outside|系统|分享|相机|相册/.test(rawType + label)) return "external";
   if (/like|favorite|collect|follow|subscribe|select|toggle|点赞|收藏|关注|订阅|选择|领取|加购/.test(rawType + label)) return "state_change";
@@ -471,21 +470,17 @@ function rebuildGraphIndexes(graph) {
 }
 
 function makeParentNodeId(mergeInfo = {}) {
-  const id = mergeInfo.target_parent_node_id || mergeInfo.parent_node_id;
+  const id = mergeInfo.targetParentNodeId || mergeInfo.parentNodeId;
   if (id) return String(id);
-  const backendId = mergeInfo.target_parent_id || mergeInfo.parent_id || mergeInfo.parent_page_id;
+  const backendId = mergeInfo.targetParentId || mergeInfo.parentId || mergeInfo.parentPageId;
   if (backendId !== undefined && backendId !== null) return `page-${backendId}`;
   return "";
 }
 
 function getWidgetDescription(rawNode) {
   return String(
-    rawNode.widgth_descirption ||
-    rawNode.widget_description ||
-    rawNode.width_description ||
     rawNode.widgetDescription ||
-    rawNode.page_info?.widgth_descirption ||
-    rawNode.page_info?.widget_description ||
+    rawNode.pageInfo?.widgetDescription ||
     ""
   ).trim();
 }
@@ -503,12 +498,11 @@ function splitGraphPayload(graphPayload) {
   }
 
   const explicitFloating = firstArray(
-    graphPayload.floating_pages,
-    graphPayload.orphan_pages,
-    graphPayload.detached_pages,
-    graphPayload.free_pages,
-    graphPayload.floatingUrls,
-    graphPayload.floating_urls
+    graphPayload.floatingPages,
+    graphPayload.orphanPages,
+    graphPayload.detachedPages,
+    graphPayload.freePages,
+    graphPayload.floatingUrls
   );
 
   const explicitRoots = firstArray(graphPayload.roots, graphPayload.trees, graphPayload.pages, graphPayload.nodes);
@@ -519,7 +513,7 @@ function splitGraphPayload(graphPayload) {
     };
   }
 
-  const singleRoot = graphPayload.tree || graphPayload.root || graphPayload.graph || graphPayload.main_tree;
+  const singleRoot = graphPayload.tree || graphPayload.root || graphPayload.graph || graphPayload.mainTree;
   if (singleRoot) {
     return {
       rootItems: Array.isArray(singleRoot) ? singleRoot : [singleRoot],
@@ -527,7 +521,7 @@ function splitGraphPayload(graphPayload) {
     };
   }
 
-  if ("page_title" in graphPayload || "page_text" in graphPayload || "page_url" in graphPayload) {
+  if ("pageTitle" in graphPayload || "pageText" in graphPayload || "pageUrl" in graphPayload) {
     return {
       rootItems: [graphPayload],
       floatingItems: explicitFloating || []
@@ -542,8 +536,8 @@ function firstArray(...values) {
 }
 
 function inferFloatingPage(rawNode) {
-  const url = String(rawNode.page_url || "").toLowerCase();
-  const text = `${rawNode.page_title || ""} ${rawNode.page_text || ""} ${JSON.stringify(rawNode.page_info || {})}`.toLowerCase();
+  const url = String(rawNode.pageUrl || "").toLowerCase();
+  const text = `${rawNode.pageTitle || ""} ${rawNode.pageText || ""} ${JSON.stringify(rawNode.pageInfo || {})}`.toLowerCase();
   const value = `${url} ${text}`;
 
   const rules = [

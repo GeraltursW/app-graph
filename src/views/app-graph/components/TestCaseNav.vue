@@ -17,21 +17,21 @@ const emit = defineEmits(['select-case', 'create-scenario']);
 const caseType = ref('path');
 const keyword = ref('');
 const builderOpen = ref(false);
-const pathCases = computed(() => props.cases.filter((item) => item.case_type === 'path'));
-const scenarioCases = computed(() => props.cases.filter((item) => item.case_type === 'scenario'));
+const pathCases = computed(() => props.cases.filter((item) => item.caseType === 'path'));
+const scenarioCases = computed(() => props.cases.filter((item) => item.caseType === 'scenario'));
 const visibleCases = computed(() => {
   const normalized = keyword.value.trim().toLowerCase();
   return props.cases.filter((item) => (
-    item.case_type === caseType.value
-    && (!normalized || `${item.case_name} ${item.description} ${item.targetPage?.displayTitle || ''}`
+    item.caseType === caseType.value
+    && (!normalized || `${item.caseName} ${item.description} ${item.targetPage?.displayTitle || ''}`
       .toLowerCase().includes(normalized))
   ));
 });
 
 function changeCaseType(value) {
   caseType.value = value;
-  const first = props.cases.find((item) => item.case_type === value);
-  if (first) emit('select-case', first.case_id);
+  const first = props.cases.find((item) => item.caseType === value);
+  if (first) emit('select-case', first.caseId);
 }
 </script>
 
@@ -74,23 +74,23 @@ function changeCaseType(value) {
       <div class="case-list">
         <button
           v-for="item in visibleCases"
-          :key="item.case_id"
+          :key="item.caseId"
           type="button"
           class="case-list-item"
-          :class="{ active: selectedCaseId === item.case_id }"
-          @click="emit('select-case', item.case_id)"
+          :class="{ active: selectedCaseId === item.caseId }"
+          @click="emit('select-case', item.caseId)"
         >
-          <span class="case-type-icon" :class="`type-${item.case_type}`">
-            <Icon :icon="item.case_type === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="16" />
+          <span class="case-type-icon" :class="`type-${item.caseType}`">
+            <Icon :icon="item.caseType === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="16" />
           </span>
           <span class="case-list-copy">
-            <strong>{{ item.case_name }}</strong>
+            <strong>{{ item.caseName }}</strong>
             <em>{{ item.description }}</em>
             <small>
-              {{ item.case_type === 'path' ? `${item.pageIds.length} 页面 · ${item.edgeSteps.length} 跳转` : `${item.steps.length} 个典型操作` }}
+              {{ item.caseType === 'path' ? `${item.pageIds.length} 页面 · ${item.edgeSteps.length} 跳转` : `${item.steps.length} 个典型操作` }}
             </small>
           </span>
-          <span v-if="execution.caseId === item.case_id" class="case-run-state" :class="`state-${execution.status}`">
+          <span v-if="execution.caseId === item.caseId" class="case-run-state" :class="`state-${execution.status}`">
             {{ execution.status === 'running' ? '执行中' : execution.status === 'completed' ? '已完成' : '' }}
           </span>
         </button>

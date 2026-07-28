@@ -142,8 +142,8 @@ function handleDrop(event) {
         <Icon v-if="hasChildren" :icon="isCollapsed ? 'ant-design:plus-outlined' : 'ant-design:minus-outlined'" :size="12" />
       </span>
       <span class="nav-name">
-        <Icon v-if="page.ai_recursive" class="tree-robot" icon="ant-design:robot-outlined" :size="14" title="AI 探索页面" />
-        {{ page.displayTitle || page.page_title }}
+        <Icon v-if="page.aiRecursive" class="tree-robot" icon="ant-design:robot-outlined" :size="14" title="AI 探索页面" />
+        {{ page.displayTitle || page.pageTitle }}
       </span>
       <span class="nav-count">L{{ page.level || 1 }}</span>
     </div>
