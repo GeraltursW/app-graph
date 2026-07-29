@@ -48,6 +48,8 @@ npm run build:mock
 - 页面详情、AI 推理信息和上下游关系
 - 页面复核编辑、图片维护与全屏预览
 - 节点二次确认删除与后台数据同步
+- 厂商 Function Tree 双 JSON 导入、自动匹配、覆盖统计与页面定位
+- Function 页面/四层动作候选复核、批量处理与已确认动作标签
 - 请求 Loading、防重复提交和成功/失败提示
 - QQ 300 节点、292 条跳转边和 7 个 AI 游离节点
 - 220 条根到叶路径用例和 80 条过程采集用例
@@ -66,10 +68,10 @@ Mock 包含内嵌 SVG 手机截图，不请求后端图片接口。编辑产生�
 
 ```env
 VITE_USE_MOCK=false
-VITE_APP_GRAPH_API_URL=/app-relation-api
+VITE_APP_GRAPH_API_URL=/appGraph
 ```
 
-开发服务器会将 `/app-relation-api` 转发到：
+开发服务器会将 `/appGraph` 转发到：
 
 ```text
 http://127.0.0.1:8000
@@ -93,6 +95,11 @@ src/views/app-graph/
   info.data.ts       固定布局和工具配置
   components/        图谱、树导航和详情组件
   data/graph.js      图谱标准化与结构计算
+  data/functionTree.ts Function Tree、Binding 与覆盖数据归一化
 
 src/mock/appGraph.ts 内置可交互演示数据
 ```
+
+## Function Tree
+
+- [Function Tree 前端端到端工作流](docs/function-tree-end-to-end.md)

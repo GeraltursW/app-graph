@@ -33,6 +33,10 @@ const props = defineProps({
   deleting: {
     type: Boolean,
     default: false
+  },
+  functionActionBindings: {
+    type: Object,
+    default: () => new Map()
   }
 });
 
@@ -124,10 +128,19 @@ const detail = computed(() => {
       path: getAncestorPath(props.graph, page.nodeId),
       upstream: incoming.map((edge) => props.graph.pageMap.get(edge.from)?.displayTitle || edge.from),
       downstream: outgoing.map((edge) => props.graph.pageMap.get(edge.to)?.displayTitle || edge.to),
-      navigationActions: outgoing.map((edge) => ({
-        label: edge.label,
-        target: props.graph.pageMap.get(edge.to)?.displayTitle || edge.to
-      })),
+      navigationActions: (actionGroups.navigate || []).length
+        ? actionGroups.navigate.map((action) => ({
+            ...action,
+            target: action.targetPageTitle
+              || action.target_page_title
+              || action.target
+              || ""
+          }))
+        : outgoing.map((edge) => ({
+            id: edge.actionId || "",
+            label: edge.label,
+            target: props.graph.pageMap.get(edge.to)?.displayTitle || edge.to
+          })),
       stateActions: actionGroups.state_change || [],
       overlayActions: actionGroups.overlay || [],
       externalActions: actionGroups.external || []
@@ -247,6 +260,31 @@ function cloneAction(action = {}) {
     key,
     (action?.[key] || []).map((item) => ({ ...item }))
   ]));
+}
+
+function functionActionSemanticKey(pageId, layer, name) {
+  const normalizedName = String(name || "")
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+  if (!pageId || !layer || !normalizedName) return "";
+  return `semantic:${String(pageId)}::${String(layer)}::${normalizedName}`;
+}
+
+function functionMatches(action, layer) {
+  const direct = action?.id
+    ? props.functionActionBindings.get(`id:${String(action.id)}`) || []
+    : [];
+  const semanticKey = functionActionSemanticKey(
+    props.payload?.pageId,
+    layer,
+    action?.label || action?.description,
+  );
+  const semantic = semanticKey
+    ? props.functionActionBindings.get(semanticKey) || []
+    : [];
+  return [...direct, ...semantic].filter((match, index, matches) => (
+    matches.findIndex((item) => item.functionId === match.functionId) === index
+  ));
 }
 
 function addAction(groupKey) {
@@ -607,7 +645,15 @@ async function saveEdit() {
                   <strong>跳转控件</strong>
                   <span>形成 Page -> Page 边</span>
                   <em v-for="action in detail.analysis.navigationActions" :key="`${action.label}-${action.target}`">
-                    {{ action.label }} -> {{ action.target }}
+                    <span>{{ action.label }} -> {{ action.target }}</span>
+                    <span
+                      v-for="match in functionMatches(action, 'pageNaviAction')"
+                      :key="match.functionId"
+                      class="action-function-tag"
+                    >
+                      <Icon icon="ant-design:deployment-unit-outlined" :size="11" />
+                      {{ match.functionName }}
+                    </span>
                   </em>
                   <em v-if="!detail.analysis.navigationActions.length">暂无</em>
                 </div>
@@ -615,7 +661,15 @@ async function saveEdit() {
                   <strong>状态动作</strong>
                   <span>不切页，只改变当前页面状态</span>
                   <em v-for="action in detail.analysis.stateActions" :key="action.id">
-                    {{ action.label }} · {{ action.stateKey }}
+                    <span>{{ action.label }} · {{ action.stateKey }}</span>
+                    <span
+                      v-for="match in functionMatches(action, 'stateAction')"
+                      :key="match.functionId"
+                      class="action-function-tag"
+                    >
+                      <Icon icon="ant-design:deployment-unit-outlined" :size="11" />
+                      {{ match.functionName }}
+                    </span>
                   </em>
                   <em v-if="!detail.analysis.stateActions.length">暂无</em>
                 </div>
@@ -623,7 +677,15 @@ async function saveEdit() {
                   <strong>弹层动作</strong>
                   <span>打开弹层、半屏或局部面板</span>
                   <em v-for="action in detail.analysis.overlayActions" :key="action.id">
-                    {{ action.label }}
+                    <span>{{ action.label }}</span>
+                    <span
+                      v-for="match in functionMatches(action, 'popupAction')"
+                      :key="match.functionId"
+                      class="action-function-tag"
+                    >
+                      <Icon icon="ant-design:deployment-unit-outlined" :size="11" />
+                      {{ match.functionName }}
+                    </span>
                   </em>
                   <em v-if="!detail.analysis.overlayActions.length">暂无</em>
                 </div>
@@ -631,7 +693,15 @@ async function saveEdit() {
                   <strong>外部动作</strong>
                   <span>系统分享、相机、第三方 SDK 等</span>
                   <em v-for="action in detail.analysis.externalActions" :key="action.id">
-                    {{ action.label }}
+                    <span>{{ action.label }}</span>
+                    <span
+                      v-for="match in functionMatches(action, 'externalAction')"
+                      :key="match.functionId"
+                      class="action-function-tag"
+                    >
+                      <Icon icon="ant-design:deployment-unit-outlined" :size="11" />
+                      {{ match.functionName }}
+                    </span>
                   </em>
                   <em v-if="!detail.analysis.externalActions.length">暂无</em>
                 </div>

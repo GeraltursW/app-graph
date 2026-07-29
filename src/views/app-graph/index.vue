@@ -10,6 +10,8 @@ import {
 } from "ant-design-vue";
 import GraphButton from "./components/shared/GraphButton.vue";
 import GraphCanvas from "./components/GraphCanvas.vue";
+import FunctionReviewPanel from "./components/FunctionReviewPanel.vue";
+import FunctionTreeImportDialog from "./components/FunctionTreeImportDialog.vue";
 import InspectorPanel from "./components/InspectorPanel.vue";
 import TestCaseNav from "./components/TestCaseNav.vue";
 import TestCasePanel from "./components/TestCasePanel.vue";
@@ -29,6 +31,11 @@ import {
   resolveTestCases
 } from "./data/testCases.js";
 import {
+  queryFunctionBindings,
+  queryFunctionCatalog,
+  queryFunctionCatalogs,
+  queryFunctionCoverage,
+  queryFunctionMatchRuns,
   queryAppGraph,
   queryAppList,
   requestAiExploreFloatingPage,
@@ -37,8 +44,16 @@ import {
   requestManualMergeFloatingPage,
   requestMergeFloatingPage,
   requestMoveNode,
+  requestImportFunctionTree,
+  requestReviewFunctionBinding,
+  requestReviewFunctionBindings,
+  requestRunFunctionMatch,
   requestSavePageReview
 } from "./info.api";
+import {
+  createEmptyFunctionCatalog,
+  createFunctionCatalogView
+} from "./data/functionTree";
 import {
   getOfficialFunctionCatalog,
   getTestCaseCatalog,
@@ -54,6 +69,13 @@ const selected = ref({ type: "node", id: "" });
 const keyword = ref("");
 const aiGraphHighlighted = ref(false);
 const selectedOfficialFunction = ref(null);
+const selectedFunctionCatalogId = ref("");
+const officialFunctionCatalog = ref(createEmptyFunctionCatalog());
+const functionCatalogLoading = ref(false);
+const functionCatalogError = ref("");
+const functionImportOpen = ref(false);
+const importingFunctionTree = ref(false);
+const reviewingFunctionBindings = ref(false);
 const workMode = ref("graph");
 const selectedCaseId = ref("");
 const customScenarioCases = ref([]);
@@ -67,6 +89,10 @@ let caseExecutionTimer = null;
 const layoutMode = ref("horizontal");
 const toolAction = ref("");
 const graphRef = ref(null);
+const shellRef = ref(null);
+const leftPaneWidth = ref(280);
+const rightPaneWidth = ref(380);
+const resizingPane = ref("");
 const layoutRevision = ref(0);
 const loading = ref(false);
 const errorMessage = ref("");
@@ -76,7 +102,12 @@ const creatingOrphan = ref(false);
 const movingNodeId = ref("");
 const deletingNodeId = ref("");
 const { createMessage } = useMessage();
+let paneResizeSession = null;
 
+const appShellStyle = computed(() => ({
+  "--left-pane-width": `${leftPaneWidth.value}px`,
+  "--right-pane-width": `${rightPaneWidth.value}px`
+}));
 
 const selectedPayload = computed(() => {
   if (selected.value.type === "edge") {
@@ -84,8 +115,48 @@ const selectedPayload = computed(() => {
   }
   return graph.value.pageMap.get(selected.value.id) || null;
 });
-const officialFunctionCatalog = computed(() => getOfficialFunctionCatalog(appName.value));
 const highlightedFunctionPageIds = computed(() => selectedOfficialFunction.value?.pageIds || []);
+const selectedFunctionDetail = computed(() => (
+  officialFunctionCatalog.value.functions.find(
+    (item) => item.functionId === selectedOfficialFunction.value?.functionId,
+  ) || null
+));
+const confirmedFunctionActionMap = computed(() => {
+  const confirmed = new Set(["autoConfirmed", "humanConfirmed", "inherited", "confirmed"]);
+  const bindings = new Map();
+  const append = (key, match) => {
+    if (!key) return;
+    if (!bindings.has(key)) bindings.set(key, []);
+    const existing = bindings.get(key);
+    if (!existing.some((item) => item.functionId === match.functionId)) existing.push(match);
+  };
+  officialFunctionCatalog.value.functions.forEach((item) => {
+    (item.actionBindings || []).forEach((binding) => {
+      if (!confirmed.has(binding.reviewStatus)) return;
+      const match = {
+        functionId: item.functionId,
+        functionName: item.functionName,
+        reviewStatus: binding.reviewStatus,
+        matchScore: binding.matchScore,
+      };
+      if (binding.actionId) append(`id:${String(binding.actionId)}`, match);
+      append(functionActionSemanticKey(
+        binding.pageHashId,
+        binding.actionLayer,
+        binding.actionName,
+      ), match);
+    });
+  });
+  return bindings;
+});
+
+function functionActionSemanticKey(pageId, layer, name) {
+  const normalizedName = String(name || "")
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+  if (!pageId || !layer || !normalizedName) return "";
+  return `semantic:${String(pageId)}::${String(layer)}::${normalizedName}`;
+}
 const resolvedTestCases = computed(() => [
   ...generateFullCoveragePathCases(graph.value, { appName: appName.value }),
   ...(appName.value === "QQ"
@@ -139,6 +210,7 @@ async function loadGraph() {
     floatingAiState.value = {};
     selected.value = { type: "node", id: normalized.roots[0] || "" };
     layoutRevision.value += 1;
+    await loadFunctionCatalogs();
     window.setTimeout(() => graphRef.value?.fitGraph(), 80);
   } catch (error) {
     graph.value = createEmptyGraph();
@@ -157,11 +229,170 @@ function selectEdge(edgeId) {
   selected.value = { type: "edge", id: edgeId };
 }
 
+async function loadFunctionCatalogs() {
+  functionCatalogLoading.value = true;
+  functionCatalogError.value = "";
+  selectedOfficialFunction.value = null;
+  try {
+    const catalogs = await queryFunctionCatalogs(appName.value.trim());
+    if (!catalogs.length) {
+      selectedFunctionCatalogId.value = "";
+      officialFunctionCatalog.value = createEmptyFunctionCatalog();
+      return;
+    }
+    const selectedCatalog = catalogs[0];
+    selectedFunctionCatalogId.value = String(selectedCatalog.catalogId);
+    await loadFunctionCatalog(selectedFunctionCatalogId.value);
+  } catch (error) {
+    const fallback = getOfficialFunctionCatalog(appName.value);
+    selectedFunctionCatalogId.value = "";
+    officialFunctionCatalog.value = fallback;
+    functionCatalogError.value = error instanceof Error
+      ? `后端 Function Tree 查询失败，当前显示离线目录：${error.message}`
+      : "后端 Function Tree 查询失败，当前显示离线目录";
+  } finally {
+    functionCatalogLoading.value = false;
+  }
+}
+
+async function loadFunctionCatalog(catalogId) {
+  if (!catalogId) return;
+  functionCatalogLoading.value = true;
+  functionCatalogError.value = "";
+  selectedOfficialFunction.value = null;
+  try {
+    const [catalogPayload, runs] = await Promise.all([
+      queryFunctionCatalog(catalogId),
+      queryFunctionMatchRuns(catalogId),
+    ]);
+    const latestRun = runs.find((item) => item.status === "completed") || runs[0] || null;
+    const [bindings, coverage] = latestRun
+      ? await Promise.all([
+          queryFunctionBindings(String(latestRun.runId)),
+          queryFunctionCoverage(String(latestRun.runId)),
+        ])
+      : [{ pageBindings: [], actionBindings: [] }, { functions: [], summary: {} }];
+    officialFunctionCatalog.value = createFunctionCatalogView(
+      catalogPayload,
+      bindings,
+      latestRun,
+      coverage,
+    );
+  } catch (error) {
+    officialFunctionCatalog.value = createEmptyFunctionCatalog("Function Tree 加载失败");
+    functionCatalogError.value = error instanceof Error ? error.message : "Function Tree 加载失败";
+  } finally {
+    functionCatalogLoading.value = false;
+  }
+}
+
 function highlightOfficialFunction(payload) {
   selectedOfficialFunction.value = payload;
   if (payload?.pageIds?.length) {
     selected.value = { type: "node", id: payload.pageIds[0] };
   }
+}
+
+function selectOfficialFunctionById(functionId) {
+  const item = officialFunctionCatalog.value.functions.find(
+    (candidate) => candidate.functionId === functionId,
+  );
+  if (!item) {
+    selectedOfficialFunction.value = null;
+    return;
+  }
+  const pageHashes = new Set(
+    (item.pageBindings || [])
+      .filter((binding) => binding.reviewStatus !== "rejected")
+      .map((binding) => String(binding.pageHashId || "")),
+  );
+  highlightOfficialFunction({
+    functionId: item.functionId,
+    functionName: item.functionName,
+    pageIds: graph.value.pages
+      .filter((page) => pageHashes.has(String(page.pageId)))
+      .map((page) => page.nodeId),
+  });
+}
+
+async function importAndMatchFunctionTree(request) {
+  if (importingFunctionTree.value) return;
+  importingFunctionTree.value = true;
+  createMessage.loading({
+    content: "正在导入 Function Tree 并运行匹配...",
+    key: "function-tree-import",
+    duration: 0,
+  });
+  try {
+    const imported = await requestImportFunctionTree(
+      request.metadataFile,
+      request.treeFile,
+      request.source,
+      request.vendorVersion,
+    );
+    if (imported.appName && imported.appName !== appName.value) {
+      throw new Error(`导入文件属于 ${imported.appName}，当前应用是 ${appName.value}`);
+    }
+    await requestRunFunctionMatch(String(imported.catalogId));
+    await loadFunctionCatalogs();
+    functionImportOpen.value = false;
+    createMessage.success({
+      content: `已导入 ${imported.functionCount || 0} 个功能点并完成匹配`,
+      key: "function-tree-import",
+      duration: 3,
+    });
+  } catch (error) {
+    createMessage.error({
+      content: error instanceof Error ? error.message : "Function Tree 导入失败",
+      key: "function-tree-import",
+      duration: 4,
+    });
+  } finally {
+    importingFunctionTree.value = false;
+  }
+}
+
+async function reviewFunctionBindings(request) {
+  if (reviewingFunctionBindings.value || !request.bindingIds?.length) return;
+  reviewingFunctionBindings.value = true;
+  const functionId = selectedOfficialFunction.value?.functionId || "";
+  try {
+    if (request.bindingIds.length === 1) {
+      await requestReviewFunctionBinding(
+        request.bindingIds[0],
+        request.targetType,
+        request.reviewStatus,
+        "Function Tree 人工复核",
+      );
+    } else {
+      await requestReviewFunctionBindings(
+        request.bindingIds,
+        request.targetType,
+        request.reviewStatus,
+        "Function Tree 批量复核",
+      );
+    }
+    await loadFunctionCatalog(selectedFunctionCatalogId.value);
+    selectOfficialFunctionById(functionId);
+    createMessage.success(
+      request.reviewStatus === "humanConfirmed" ? "匹配结果已确认" : "匹配结果已拒绝",
+    );
+  } catch (error) {
+    createMessage.error(error instanceof Error ? error.message : "复核保存失败");
+  } finally {
+    reviewingFunctionBindings.value = false;
+  }
+}
+
+function locateFunctionBinding(binding) {
+  const page = graph.value.pages.find(
+    (item) => String(item.pageId) === String(binding.pageHashId || ""),
+  );
+  if (!page) {
+    createMessage.warning("该绑定页面不在当前图谱版本中");
+    return;
+  }
+  selected.value = { type: "node", id: page.nodeId };
 }
 
 function selectTestCase(caseId) {
@@ -476,8 +707,96 @@ async function savePageReview(submission) {
     submission?.reject?.(error);
   }
 }
-onMounted(loadInitialApps);
-onBeforeUnmount(stopCaseExecution);
+function clampPaneWidth(value, minimum, maximum) {
+  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+}
+
+function paneWidthLimits() {
+  const shellWidth = shellRef.value?.getBoundingClientRect().width || window.innerWidth;
+  const available = Math.max(900, shellWidth - 64);
+  return {
+    maxLeft: Math.min(520, available - rightPaneWidth.value - 520),
+    maxRight: Math.min(620, available - leftPaneWidth.value - 520)
+  };
+}
+
+function persistPaneWidths() {
+  localStorage.setItem("app-graph-pane-widths", JSON.stringify({
+    left: leftPaneWidth.value,
+    right: rightPaneWidth.value
+  }));
+}
+
+function restorePaneWidths() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("app-graph-pane-widths") || "{}");
+    if (Number.isFinite(saved.left)) leftPaneWidth.value = clampPaneWidth(saved.left, 220, 520);
+    if (Number.isFinite(saved.right)) rightPaneWidth.value = clampPaneWidth(saved.right, 300, 620);
+  } catch {
+    localStorage.removeItem("app-graph-pane-widths");
+  }
+}
+
+function startPaneResize(event, pane) {
+  event.preventDefault();
+  event.stopPropagation();
+  paneResizeSession = {
+    pane,
+    startX: event.clientX,
+    left: leftPaneWidth.value,
+    right: rightPaneWidth.value
+  };
+  resizingPane.value = pane;
+  document.body.classList.add("app-graph-pane-resizing");
+  document.addEventListener("pointermove", handlePaneResize);
+  document.addEventListener("pointerup", stopPaneResize, { once: true });
+}
+
+function handlePaneResize(event) {
+  if (!paneResizeSession) return;
+  const delta = event.clientX - paneResizeSession.startX;
+  const limits = paneWidthLimits();
+  if (paneResizeSession.pane === "left") {
+    leftPaneWidth.value = clampPaneWidth(paneResizeSession.left + delta, 220, limits.maxLeft);
+  } else {
+    rightPaneWidth.value = clampPaneWidth(paneResizeSession.right - delta, 300, limits.maxRight);
+  }
+}
+
+function stopPaneResize() {
+  if (!paneResizeSession) return;
+  paneResizeSession = null;
+  resizingPane.value = "";
+  document.body.classList.remove("app-graph-pane-resizing");
+  document.removeEventListener("pointermove", handlePaneResize);
+  persistPaneWidths();
+  window.setTimeout(() => graphRef.value?.fitGraph(), 80);
+}
+
+function resizePaneByKeyboard(event, pane) {
+  if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowRight" ? 1 : -1;
+  const limits = paneWidthLimits();
+  if (pane === "left") {
+    leftPaneWidth.value = clampPaneWidth(leftPaneWidth.value + direction * 20, 220, limits.maxLeft);
+  } else {
+    rightPaneWidth.value = clampPaneWidth(rightPaneWidth.value - direction * 20, 300, limits.maxRight);
+  }
+  persistPaneWidths();
+  window.setTimeout(() => graphRef.value?.fitGraph(), 80);
+}
+
+onMounted(() => {
+  restorePaneWidths();
+  loadInitialApps();
+});
+onBeforeUnmount(() => {
+  stopCaseExecution();
+  paneResizeSession = null;
+  document.body.classList.remove("app-graph-pane-resizing");
+  document.removeEventListener("pointermove", handlePaneResize);
+});
 
 watch(workMode, (value) => {
   if (value === "cases") {
@@ -493,7 +812,12 @@ watch(workMode, (value) => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    ref="shellRef"
+    class="app-shell"
+    :class="{ 'is-pane-resizing': resizingPane }"
+    :style="appShellStyle"
+  >
     <header class="topbar">
         <div class="topbar-actions">
           <a-segmented
@@ -552,6 +876,8 @@ watch(workMode, (value) => {
       v-model:ai-graph-highlighted="aiGraphHighlighted"
       :graph="graph"
       :function-catalog="officialFunctionCatalog"
+      :function-catalog-error="functionCatalogError"
+      :function-catalog-loading="functionCatalogLoading"
       :floating-ai-state="floatingAiState"
       :creating-orphan="creatingOrphan"
       :loading="loading"
@@ -564,6 +890,8 @@ watch(workMode, (value) => {
       @merge-floating-node="mergeFloatingNode"
       @move-tree-node="moveTreeNode"
       @highlight-function="highlightOfficialFunction"
+      @import-function-tree="functionImportOpen = true"
+      @reload-function-catalog="loadFunctionCatalogs"
       @select-node="selectNode"
     />
     <TestCaseNav
@@ -574,6 +902,18 @@ watch(workMode, (value) => {
       :selected-case-id="activeTestCase?.caseId || ''"
       @create-scenario="createScenarioCase"
       @select-case="selectTestCase"
+    />
+
+    <div
+      class="pane-resizer pane-resizer-left"
+      :class="{ active: resizingPane === 'left' }"
+      role="separator"
+      aria-label="调整左侧导航宽度"
+      aria-orientation="vertical"
+      :aria-valuenow="leftPaneWidth"
+      tabindex="0"
+      @keydown="resizePaneByKeyboard($event, 'left')"
+      @pointerdown="startPaneResize($event, 'left')"
     />
 
     <main class="workspace">
@@ -603,9 +943,30 @@ watch(workMode, (value) => {
       />
     </main>
 
+    <div
+      class="pane-resizer pane-resizer-right"
+      :class="{ active: resizingPane === 'right' }"
+      role="separator"
+      aria-label="调整右侧详情宽度"
+      aria-orientation="vertical"
+      :aria-valuenow="rightPaneWidth"
+      tabindex="0"
+      @keydown="resizePaneByKeyboard($event, 'right')"
+      @pointerdown="startPaneResize($event, 'right')"
+    />
+
+    <FunctionReviewPanel
+      v-if="workMode === 'graph' && selectedFunctionDetail"
+      :function-item="selectedFunctionDetail"
+      :loading="reviewingFunctionBindings"
+      @close="highlightOfficialFunction(null)"
+      @locate="locateFunctionBinding"
+      @review="reviewFunctionBindings"
+    />
     <InspectorPanel
-      v-if="workMode === 'graph'"
+      v-else-if="workMode === 'graph'"
       :deleting="Boolean(deletingNodeId)"
+      :function-action-bindings="confirmedFunctionActionMap"
       :graph="graph"
       :selected="selected"
       :payload="selectedPayload"
@@ -618,6 +979,14 @@ watch(workMode, (value) => {
       :test-case="activeTestCase"
       @run-case="runTestCase"
       @stop-case="stopCaseExecution"
+    />
+
+    <FunctionTreeImportDialog
+      :app-name="appName"
+      :loading="importingFunctionTree"
+      :open="functionImportOpen"
+      @cancel="functionImportOpen = false"
+      @submit="importAndMatchFunctionTree"
     />
   </div>
 </template>

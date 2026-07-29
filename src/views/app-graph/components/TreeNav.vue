@@ -25,6 +25,14 @@ const props = defineProps({
     type: Object,
     default: () => ({ source: "", version: "", functions: [] })
   },
+  functionCatalogLoading: {
+    type: Boolean,
+    default: false
+  },
+  functionCatalogError: {
+    type: String,
+    default: ""
+  },
   selectedFunctionId: {
     type: String,
     default: ""
@@ -55,6 +63,8 @@ const emit = defineEmits([
   "update:keyword",
   "update:ai-graph-highlighted",
   "highlight-function",
+  "import-function-tree",
+  "reload-function-catalog",
   "create-floating-node",
   "select-node",
   "explore-floating-node",
@@ -285,9 +295,13 @@ function handleMoveTreeNode(payload) {
         <OfficialFunctionTree
           v-else-if="navigationMode === 'functions'"
           :catalog="functionCatalog"
+          :error="functionCatalogError"
           :graph="graph"
+          :loading="functionCatalogLoading"
           :selected-function-id="selectedFunctionId"
           @highlight-function="emit('highlight-function', $event)"
+          @import-tree="emit('import-function-tree')"
+          @reload="emit('reload-function-catalog')"
         />
         <div v-else-if="!tree.length" class="empty-state">暂无主树数据</div>
         <div v-else>
