@@ -30,6 +30,7 @@ enum Api {
   FunctionMatchRuns = '/api/functionMatch/runs',
   FunctionMatchRun = '/api/functionMatch/run',
   FunctionBindings = '/api/functionBindings',
+  TestReports = '/api/testReports',
 }
 
 export function buildImageApiUrl(imageUrl: string) {
@@ -38,6 +39,13 @@ export function buildImageApiUrl(imageUrl: string) {
   if (/^(data:|blob:)/i.test(normalizedUrl)) return normalizedUrl;
   if (/\/s3file\/image(?:\?|$)/i.test(normalizedUrl)) return normalizedUrl;
   return `${API_BASE_URL}/s3file/image?fileName=${encodeURIComponent(normalizedUrl)}`;
+}
+
+export function buildGraphThumbnailApiUrl(imageUrl: string, width = 240) {
+  const fullSizeUrl = buildImageApiUrl(imageUrl);
+  if (!fullSizeUrl || /^(data:|blob:)/i.test(fullSizeUrl)) return fullSizeUrl;
+  const separator = fullSizeUrl.includes('?') ? '&' : '?';
+  return `${fullSizeUrl}${separator}width=${Math.max(80, Math.min(width, 480))}`;
 }
 
 export const queryAppGraph = (appName: string) =>
@@ -118,6 +126,28 @@ export async function queryFunctionCoverage(runId: string) {
     throw new Error('Function coverage response is invalid');
   }
   return payload;
+}
+
+export async function queryTestReports(appName: string) {
+  const payload = await defHttp.get<any>(
+    { url: Api.TestReports, params: { appName } },
+    rawRequestOptions,
+  );
+  if (payload?.status !== 'success' || !Array.isArray(payload?.reports)) {
+    throw new Error('Test report list response is invalid');
+  }
+  return payload.reports;
+}
+
+export async function queryTestReport(runId: string) {
+  const payload = await defHttp.get<any>(
+    { url: `${Api.TestReports}/${encodeURIComponent(runId)}` },
+    rawRequestOptions,
+  );
+  if (payload?.status !== 'success' || !payload?.report) {
+    throw new Error('Test report response is invalid');
+  }
+  return payload.report;
 }
 
 export async function requestImportFunctionTree(

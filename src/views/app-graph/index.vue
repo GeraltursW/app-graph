@@ -15,6 +15,9 @@ import FunctionTreeImportDialog from "./components/FunctionTreeImportDialog.vue"
 import InspectorPanel from "./components/InspectorPanel.vue";
 import TestCaseNav from "./components/TestCaseNav.vue";
 import TestCasePanel from "./components/TestCasePanel.vue";
+import TestReportDashboard from "./components/TestReportDashboard.vue";
+import TestReportEvidence from "./components/TestReportEvidence.vue";
+import TestReportNav from "./components/TestReportNav.vue";
 import TreeNav from "./components/TreeNav.vue";
 import "./style.css";
 import {
@@ -30,6 +33,7 @@ import {
   generateMockScenarioCases,
   resolveTestCases
 } from "./data/testCases.js";
+import { createMockTestReport } from "./data/testReports.js";
 import {
   queryFunctionBindings,
   queryFunctionCatalog,
@@ -78,6 +82,7 @@ const importingFunctionTree = ref(false);
 const reviewingFunctionBindings = ref(false);
 const workMode = ref("graph");
 const selectedCaseId = ref("");
+const selectedReportId = ref("");
 const customScenarioCases = ref([]);
 const caseExecution = ref({
   caseId: "",
@@ -171,6 +176,11 @@ const activeTestCase = computed(() => (
   resolvedTestCases.value.find((item) => item.caseId === selectedCaseId.value)
   || resolvedTestCases.value[0]
   || null
+));
+const testReport = computed(() => createMockTestReport(graph.value, appName.value));
+const activeUrlReport = computed(() => (
+  testReport.value.urlReports.find((item) => item.reportId === selectedReportId.value)
+  || testReport.value.urlReports[0]
 ));
 
 async function loadInitialApps() {
@@ -399,6 +409,12 @@ function selectTestCase(caseId) {
   selectedCaseId.value = caseId;
   const testCase = resolvedTestCases.value.find((item) => item.caseId === caseId);
   if (testCase?.startPage) selected.value = { type: "node", id: testCase.startPage.nodeId };
+}
+
+function selectUrlReport(reportId) {
+  selectedReportId.value = reportId;
+  const report = testReport.value.urlReports.find((item) => item.reportId === reportId);
+  if (report?.match?.nodeId) selected.value = { type: "node", id: report.match.nodeId };
 }
 
 function createScenarioCase(testCase) {
@@ -807,6 +823,15 @@ watch(workMode, (value) => {
     }
     return;
   }
+  if (value === "reports") {
+    aiGraphHighlighted.value = false;
+    selectedOfficialFunction.value = null;
+    stopCaseExecution();
+    if (!selectedReportId.value && testReport.value.urlReports.length) {
+      selectUrlReport(testReport.value.urlReports[0].reportId);
+    }
+    return;
+  }
   stopCaseExecution();
 });
 </script>
@@ -815,7 +840,7 @@ watch(workMode, (value) => {
   <div
     ref="shellRef"
     class="app-shell"
-    :class="{ 'is-pane-resizing': resizingPane }"
+    :class="{ 'is-pane-resizing': resizingPane, 'report-mode': workMode === 'reports' }"
     :style="appShellStyle"
   >
     <header class="topbar">
@@ -855,6 +880,7 @@ watch(workMode, (value) => {
           </div>
 
           <a-segmented
+            v-if="workMode !== 'reports'"
             v-model:value="layoutMode"
             class="layout-switch"
             :options="layoutModes"
@@ -862,6 +888,7 @@ watch(workMode, (value) => {
           />
 
           <a-segmented
+            v-if="workMode !== 'reports'"
             :value="toolAction"
             class="graph-tools"
             :options="toolActions"
@@ -895,13 +922,19 @@ watch(workMode, (value) => {
       @select-node="selectNode"
     />
     <TestCaseNav
-      v-else
+      v-else-if="workMode === 'cases'"
       :cases="resolvedTestCases"
       :execution="caseExecution"
       :pages="graph.pages.filter((page) => !page.isFloating)"
       :selected-case-id="activeTestCase?.caseId || ''"
       @create-scenario="createScenarioCase"
       @select-case="selectTestCase"
+    />
+    <TestReportNav
+      v-else
+      :report="testReport"
+      :selected-report-id="activeUrlReport?.reportId || ''"
+      @select-report="selectUrlReport"
     />
 
     <div
@@ -924,6 +957,7 @@ watch(workMode, (value) => {
       </div>
 
       <GraphCanvas
+        v-if="workMode !== 'reports'"
         ref="graphRef"
         :graph="graph"
         :loading="loading"
@@ -940,6 +974,11 @@ watch(workMode, (value) => {
         :case-execution="caseExecution"
         @select-node="selectNode"
         @select-edge="selectEdge"
+      />
+      <TestReportDashboard
+        v-else-if="activeUrlReport"
+        :report="testReport"
+        :selected="activeUrlReport"
       />
     </main>
 
@@ -974,11 +1013,15 @@ watch(workMode, (value) => {
       @delete-node="deleteNode"
     />
     <TestCasePanel
-      v-else
+      v-else-if="workMode === 'cases'"
       :execution="caseExecution"
       :test-case="activeTestCase"
       @run-case="runTestCase"
       @stop-case="stopCaseExecution"
+    />
+    <TestReportEvidence
+      v-else-if="activeUrlReport"
+      :selected="activeUrlReport"
     />
 
     <FunctionTreeImportDialog

@@ -3,10 +3,11 @@ import Icon from '@/components/Icon/Icon.vue';
 import {
   EdgeEvent,
   Graph,
+  GraphEvent,
   NodeEvent,
 } from '@antv/g6';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { buildImageApiUrl } from '../info.api';
+import { buildGraphThumbnailApiUrl, buildImageApiUrl } from '../info.api';
 import { getOutgoingEdges, normalizeImageUrls } from '../data/graph.js';
 import { registerAppPageNode } from './graph/AppPageNode.js';
 import GraphButton from './shared/GraphButton.vue';
@@ -37,6 +38,8 @@ const collapsed = ref(new Set());
 const rendering = ref(false);
 let graphInstance = null;
 let resizeObserver = null;
+let resizeTimer = null;
+let presentationTimer = null;
 let renderSequence = 0;
 let selectedElement = null;
 let renderQueue = Promise.resolve();
@@ -52,6 +55,7 @@ const clusterTones = [
 const floatingTone = { accent: '#b7791f', stroke: '#e7bd63', fill: '#fff0c9', surface: '#fff8e7' };
 
 const normalizedKeyword = computed(() => props.keyword.trim().toLowerCase());
+const largeGraph = computed(() => props.graph.pages.length > 120);
 const hoveredPage = ref(null);
 const caseMode = computed(() => Boolean(props.testCase));
 const caseEdgeStepMap = computed(() => new Map(
@@ -60,10 +64,43 @@ const caseEdgeStepMap = computed(() => new Map(
 const caseNodeStepMap = computed(() => new Map(
   (props.testCase?.pageIds || []).map((nodeId, index) => [nodeId, index + 1]),
 ));
+const functionPageIdSet = computed(() => new Set(props.highlightedPageIds));
+const testCasePageIdSet = computed(() => new Set(props.testCase?.pageIds || []));
 const rootIds = computed(() => [...props.graph.roots, ...props.graph.floatingRoots]);
 const previewCandidates = computed(() => {
   const image = normalizeImageUrls(previewPage.value || {})[0];
   return image ? [buildImageApiUrl(image)] : [];
+});
+
+function resolveClusterKey(page) {
+  if (page.isFloating) return 'floating';
+  let cursor = page;
+  while (cursor?.parentId) {
+    const parent = props.graph.pageMap.get(cursor.parentId);
+    if (!parent || parent.level <= 1) return cursor.nodeId;
+    cursor = parent;
+  }
+  return 'root';
+}
+
+const clusterContext = computed(() => {
+  const nodeKeys = new Map();
+  const orderedKeys = [];
+  const seenKeys = new Set();
+  props.graph.pages.forEach((page) => {
+    const key = resolveClusterKey(page);
+    nodeKeys.set(page.nodeId, key);
+    if (key !== 'root' && key !== 'floating' && !seenKeys.has(key)) {
+      seenKeys.add(key);
+      orderedKeys.push(key);
+    }
+  });
+  const tones = new Map([
+    ['root', clusterTones[0]],
+    ['floating', floatingTone],
+  ]);
+  orderedKeys.forEach((key, index) => tones.set(key, clusterTones[index % clusterTones.length]));
+  return { nodeKeys, tones };
 });
 
 function searchableText(page) {
@@ -141,22 +178,11 @@ function getNodeSize() {
 }
 
 function getClusterKey(page) {
-  if (page.isFloating) return 'floating';
-  let cursor = page;
-  while (cursor?.parentId) {
-    const parent = props.graph.pageMap.get(cursor.parentId);
-    if (!parent || parent.level <= 1) return cursor.nodeId;
-    cursor = parent;
-  }
-  return 'root';
+  return clusterContext.value.nodeKeys.get(page.nodeId) || 'root';
 }
 
 function getClusterTone(clusterKey) {
-  if (clusterKey === 'floating') return floatingTone;
-  const keys = [...new Set(props.graph.pages
-    .map(getClusterKey)
-    .filter((key) => key !== 'root' && key !== 'floating'))];
-  return clusterTones[Math.max(0, keys.indexOf(clusterKey)) % clusterTones.length];
+  return clusterContext.value.tones.get(clusterKey) || clusterTones[0];
 }
 
 function getClusterLabel(clusterKey) {
@@ -179,8 +205,8 @@ function openPreview(page) {
 function toG6Data() {
   const visibleIds = getVisibleIds();
   const keyword = normalizedKeyword.value;
-  const functionPageIds = new Set(props.highlightedPageIds);
-  const testCasePageIds = new Set(props.testCase?.pageIds || []);
+  const functionPageIds = functionPageIdSet.value;
+  const testCasePageIds = testCasePageIdSet.value;
   const [width, height] = getNodeSize();
   const visiblePages = props.graph.pages.filter((page) => visibleIds.has(page.nodeId));
   const clusterCounts = visiblePages.reduce((counts, page) => {
@@ -207,12 +233,12 @@ function toG6Data() {
             title: page.displayTitle,
             description: page.pageText,
             pageUrl: page.pageUrl,
-            imageSrc: firstImage ? buildImageApiUrl(firstImage) : '',
+            imageSrc: firstImage ? buildGraphThumbnailApiUrl(firstImage) : '',
             metaText: `L${page.level}  ${outgoingCount} 个下级`,
             outgoingCount,
             collapsed: collapsed.value.has(page.nodeId),
             floating: page.isFloating,
-            compact: false,
+            compact: largeGraph.value,
             accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
             badgeText: caseActive
               ? '执行中'
@@ -277,6 +303,8 @@ function getLayout() {
       nodeSize: [width, height],
       comboPadding: 70,
       spacing: 120,
+      animation: false,
+      preLayout: true,
     };
   }
   return {
@@ -285,15 +313,31 @@ function getLayout() {
     nodeSize: [width, height],
     nodesep: 74,
     ranksep: 170,
-    ranker: 'network-simplex',
+    ranker: largeGraph.value ? 'tight-tree' : 'network-simplex',
+    animation: false,
+    preLayout: true,
   };
 }
 
 function getBehaviors() {
-  return [
+  const behaviors = [
     'drag-canvas',
     'zoom-canvas',
     'drag-element',
+    {
+      key: 'optimize-large-viewport',
+      type: 'optimize-viewport-transform',
+      enable: () => largeGraph.value,
+      debounce: 120,
+      shapes: {
+        node: ['key', 'header'],
+        edge: [],
+        combo: ['key'],
+      },
+    },
+  ];
+  if (!largeGraph.value) {
+    behaviors.push(
     {
       key: 'keep-controls-readable',
       type: 'fix-element-size',
@@ -303,7 +347,9 @@ function getBehaviors() {
       edge: [{ shape: 'key', fields: ['lineWidth'] }, { shape: 'label' }],
       combo: [{ shape: 'key', fields: ['lineWidth'] }, { shape: 'label' }],
     },
-  ];
+    );
+  }
+  return behaviors;
 }
 
 function createGraph() {
@@ -311,7 +357,7 @@ function createGraph() {
   const nodeType = registerAppPageNode();
   graphInstance = new Graph({
     container: containerRef.value,
-    autoResize: true,
+    autoResize: false,
     padding: 56,
     data: toG6Data(),
     layout: getLayout(),
@@ -331,7 +377,7 @@ function createGraph() {
           : datum.style.caseRole || datum.data.page.aiRecursive || datum.data.page.isFloating ? 2 : 1.5,
         radius: 6,
         shadowColor: 'rgba(40, 79, 128, 0.15)',
-        shadowBlur: 12,
+        shadowBlur: () => largeGraph.value ? 0 : 12,
         shadowOffsetY: 4,
         opacity: (datum) => datum.style.matched ? 1 : 0.24,
         cursor: 'pointer',
@@ -341,6 +387,7 @@ function createGraph() {
       state: {
         selected: { stroke: '#1677ff', lineWidth: 3, shadowColor: 'rgba(22, 119, 255, 0.3)', shadowBlur: 18 },
       },
+      animation: false,
     },
     combo: {
       type: 'rect',
@@ -364,6 +411,7 @@ function createGraph() {
         labelBackgroundRadius: 5,
         labelBackgroundPadding: [6, 10],
       },
+      animation: false,
     },
     edge: {
       type: (datum) => props.layoutMode === 'radial' ? 'line' : 'polyline',
@@ -399,6 +447,7 @@ function createGraph() {
       state: {
         selected: { stroke: '#1769e0', lineWidth: 4 },
       },
+      animation: false,
     },
     behaviors: getBehaviors(),
     plugins: [{ type: 'minimap', key: 'minimap', size: [168, 104] }],
@@ -416,6 +465,54 @@ function createGraph() {
     if (page) openPreview(page);
   });
   graphInstance.on(EdgeEvent.CLICK, (event) => emit('select-edge', event.target.id));
+  graphInstance.on(GraphEvent.AFTER_TRANSFORM, () => {
+    hoveredPage.value = null;
+  });
+}
+
+function getNodePresentationStyle(page) {
+  const keyword = normalizedKeyword.value;
+  const functionPageIds = functionPageIdSet.value;
+  const testCasePageIds = testCasePageIdSet.value;
+  const clusterKey = getClusterKey(page);
+  const tone = getClusterTone(clusterKey);
+  const caseStep = caseNodeStepMap.value.get(page.nodeId) || 0;
+  const caseRole = getCaseNodeRole(page.nodeId, caseStep);
+  const caseActive = getActiveCaseNodeId() === page.nodeId;
+  return {
+    compact: largeGraph.value,
+    accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
+    badgeText: caseActive
+      ? '执行中'
+      : caseRole || (page.aiRecursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
+    caseRole,
+    caseStep,
+    caseActive,
+    matched: (!keyword || searchableText(page).includes(keyword))
+      && (!props.aiGraphHighlighted || page.aiRecursive)
+      && (!props.functionHighlightActive || functionPageIds.has(page.nodeId))
+      && (!caseMode.value || testCasePageIds.has(page.nodeId)),
+  };
+}
+
+async function updateGraphPresentation() {
+  if (!graphInstance) return;
+  const currentNodeIds = new Set(graphInstance.getNodeData().map((node) => node.id));
+  const currentEdgeIds = new Set(graphInstance.getEdgeData().map((edge) => edge.id));
+  graphInstance.updateNodeData(props.graph.pages
+    .filter((page) => currentNodeIds.has(page.nodeId))
+    .map((page) => ({ id: page.nodeId, style: getNodePresentationStyle(page) })));
+  graphInstance.updateEdgeData(props.graph.edges
+    .filter((edge) => currentEdgeIds.has(edge.id))
+    .map((edge) => ({
+      id: edge.id,
+      style: {
+        caseStep: caseEdgeStepMap.value.get(edge.id) || 0,
+        caseActive: caseEdgeStepMap.value.get(edge.id) === props.caseExecution.currentStep
+          && props.caseExecution.status === 'running',
+      },
+    })));
+  await graphInstance.draw();
 }
 
 async function performRender({ fit = false } = {}) {
@@ -442,10 +539,24 @@ async function performRender({ fit = false } = {}) {
 }
 
 function renderGraph(options = {}) {
+  if (presentationTimer) {
+    window.clearTimeout(presentationTimer);
+    presentationTimer = null;
+  }
   renderQueue = renderQueue
     .catch(() => undefined)
     .then(() => performRender(options));
   return renderQueue;
+}
+
+function queuePresentationUpdate() {
+  if (presentationTimer) window.clearTimeout(presentationTimer);
+  presentationTimer = window.setTimeout(() => {
+    presentationTimer = null;
+    renderQueue = renderQueue
+      .catch(() => undefined)
+      .then(updateGraphPresentation);
+  }, 90);
 }
 
 async function syncSelection(focus = true) {
@@ -477,7 +588,6 @@ function queueSelectionSync() {
   renderQueue = renderQueue
     .catch(() => undefined)
     .then(async () => {
-      if (graphInstance && props.graph.pages.length > 120) await graphInstance.draw();
       await syncSelection(true);
     });
   return renderQueue;
@@ -550,8 +660,8 @@ watch(() => [
   props.caseExecution.currentStep,
   props.caseExecution.status,
 ], () => {
-  nextTick(() => renderGraph());
-}, { deep: true });
+  nextTick(queuePresentationUpdate);
+}, { deep: false });
 
 watch(() => props.testCase, () => {
   nextTick(() => renderGraph({ fit: true }));
@@ -563,11 +673,19 @@ watch(() => props.selected, () => {
 
 onMounted(async () => {
   await renderGraph({ fit: true });
-  resizeObserver = new ResizeObserver(() => graphInstance?.resize());
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeTimer) window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      resizeTimer = null;
+      graphInstance?.resize();
+    }, 80);
+  });
   if (containerRef.value) resizeObserver.observe(containerRef.value);
 });
 
 onBeforeUnmount(() => {
+  if (presentationTimer) window.clearTimeout(presentationTimer);
+  if (resizeTimer) window.clearTimeout(resizeTimer);
   resizeObserver?.disconnect();
   graphInstance?.destroy();
   graphInstance = null;
