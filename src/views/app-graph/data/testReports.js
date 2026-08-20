@@ -13,6 +13,23 @@ function metric(label, baseline, current, unit, threshold, direction = 'lower') 
   };
 }
 
+function createTrend(seed, isRisky) {
+  const periods = ['06/06', '06/13', '06/20', '06/27', '07/04', '07/11', '07/18', '07/25', '08/01', '08/08', '08/15', '08/19'];
+  return periods.map((period, index) => {
+    const regression = isRisky && index >= 8;
+    const wave = ((seed * 7 + index * 11) % 9) - 4;
+    return {
+      period,
+      batchId: `PERIOD-${String(index + 1).padStart(2, '0')}`,
+      runCount: 4 + ((seed + index) % 4),
+      passRate: Math.max(45, Math.min(100, 96 + wave - (regression ? 22 + (index % 3) * 4 : 0))),
+      fps: Number((58.4 + wave * .35 - (regression ? 9.2 + (index % 2) * 2.4 : 0)).toFixed(1)),
+      power: Number((.86 + Math.abs(wave) * .025 + (regression ? .42 + (index % 2) * .12 : 0)).toFixed(2)),
+      issueCount: Math.max(0, Math.round(Math.abs(wave) / 2) - 1 + (regression ? 3 + (index % 2) : 0)),
+    };
+  });
+}
+
 export function createMockTestReport(graph, appName = 'QQ') {
   const pages = graph.pages.filter((page) => !page.isFloating);
   const pick = (index) => pages[index % Math.max(1, pages.length)] || {
@@ -23,7 +40,7 @@ export function createMockTestReport(graph, appName = 'QQ') {
     imageUrls: [],
   };
   const levels = ['critical', 'high', 'high', 'medium', 'medium', 'low'];
-  const scenarios = ['消息列表连续加载', '短视频首屏滑动', '搜索结果快速切换', '群聊图片查看', '会员中心打开', '设置页往返'];
+  const scenarios = ['终点页上下滑动循环', '终点页返回再进入循环', '终点页上下滑动循环', '终点页返回再进入循环', '终点页上下滑动循环', '终点页返回再进入循环'];
   const reports = scenarios.map((scenario, index) => {
     const page = pick(index * 11 + 3);
     const failed = index < 2;
@@ -39,6 +56,7 @@ export function createMockTestReport(graph, appName = 'QQ') {
       status: failed ? 'failed' : warning ? 'warning' : 'passed',
       score,
       scenario,
+      trend: createTrend(index + 1, failed || warning),
       triggeredAt: `2026-08-19 ${String(10 + index).padStart(2, '0')}:${String(8 + index * 7).padStart(2, '0')}:20`,
       match: {
         pageId: page.pageId,
@@ -65,7 +83,7 @@ export function createMockTestReport(graph, appName = 'QQ') {
       steps: [
         { stepNo: 1, stage: 'script', title: '重置应用并恢复账号态', action: 'forceStop -> launch', status: 'passed', durationMs: 1840, evidence: image },
         { stepNo: 2, stage: 'backend', title: '按图谱最短路径恢复页面', action: '首页 -> 目标功能入口', status: 'passed', durationMs: 2320, evidence: image },
-        { stepNo: 3, stage: 'script', title: scenario, action: index % 2 ? 'swipe(up) x 4' : 'tap + wait + swipe', status: failed ? 'failed' : 'passed', durationMs: 5680, evidence: image },
+        { stepNo: 3, stage: 'script', title: scenario, action: index % 2 ? 'back -> re-enter x 3' : 'swipe(up x 4) -> swipe(down x 3)', status: failed ? 'failed' : 'passed', durationMs: 5680, evidence: image },
         { stepNo: 4, stage: 'backend', title: '采集并对齐性能时间窗', action: 'collect(cpu,fps,power,memory)', status: 'passed', durationMs: 30000, evidence: image },
         { stepNo: 5, stage: 'frontend', title: '生成可追溯测试报告', action: 'aggregate -> render', status: 'passed', durationMs: 420, evidence: image },
       ],
@@ -98,11 +116,6 @@ export function createMockTestReport(graph, appName = 'QQ') {
       warningCases: warningCount,
       passRate: Math.round(((reports.length - failedCount) / reports.length) * 100),
     },
-    pipeline: [
-      { key: 'script', label: '设备脚本', detail: '6/6 任务完成', status: 'passed', duration: '4m 18s' },
-      { key: 'backend', label: '后端编排', detail: 'URL 匹配与用例生成完成', status: 'passed', duration: '1.8s' },
-      { key: 'frontend', label: '前端报告', detail: '证据链完整可下钻', status: 'passed', duration: '420ms' },
-    ],
     urlReports: reports,
   };
 }

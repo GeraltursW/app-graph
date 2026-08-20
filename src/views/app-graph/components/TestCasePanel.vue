@@ -23,6 +23,7 @@ function operationIcon(step) {
     collect: 'ant-design:fund-projection-screen-outlined',
     swipe: 'ant-design:swap-outlined',
     long_press: 'ant-design:clock-circle-outlined',
+    back_forward: 'ant-design:swap-outlined',
     wait: 'ant-design:hourglass-outlined',
     tap: 'ant-design:aim-outlined',
   }[step.type] || 'ant-design:play-circle-outlined';
@@ -90,9 +91,10 @@ function operationIcon(step) {
               <span class="case-step-icon"><Icon :icon="operationIcon(step)" :size="15" /></span>
               <span class="case-step-copy">
                 <strong>{{ step.title }}</strong>
-                <em v-if="step.type === 'swipe'">{{ step.target || '页面内容区' }} · {{ step.direction === 'up' ? '向上' : step.direction }} · 重复 {{ step.repeat || 1 }} 次</em>
+                <em v-if="step.type === 'swipe'">{{ step.target || '页面内容区' }} · {{ step.direction === 'up' ? '向上' : step.direction === 'down' ? '向下' : step.direction }} · 重复 {{ step.repeat || 1 }} 次</em>
                 <em v-else-if="step.type === 'long_press'">{{ step.target || '目标区域' }} · 持续 {{ step.durationMs }} ms</em>
                 <em v-else-if="step.type === 'tap'">点击 {{ step.target || '目标控件' }} · 重复 {{ step.repeat || 1 }} 次</em>
+                <em v-else-if="step.type === 'back_forward'">返回上一页后重新进入 · 重复 {{ step.repeat || 1 }} 次 · 入口 {{ step.target }}</em>
                 <em v-else-if="step.type === 'wait'">等待 {{ step.durationMs }} ms</em>
                 <em v-else-if="step.type === 'collect'">在目标页面记录全部性能指标</em>
                 <em v-else>校验目标页面后继续执行</em>

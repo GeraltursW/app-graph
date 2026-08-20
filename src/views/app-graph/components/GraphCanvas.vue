@@ -687,8 +687,16 @@ onBeforeUnmount(() => {
   if (presentationTimer) window.clearTimeout(presentationTimer);
   if (resizeTimer) window.clearTimeout(resizeTimer);
   resizeObserver?.disconnect();
-  graphInstance?.destroy();
+  const instance = graphInstance;
+  const minimap = instance?.getPluginInstance?.('minimap');
+  minimap?.unbindEvents?.();
   graphInstance = null;
+  // G6 Minimap keeps a 128ms trailing render without exposing cancellation.
+  // Let that callback drain before destroying its graph context.
+  window.setTimeout(() => {
+    instance?.setPlugins?.([]);
+    instance?.destroy();
+  }, 180);
 });
 </script>
 

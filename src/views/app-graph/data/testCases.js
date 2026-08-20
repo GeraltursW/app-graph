@@ -25,7 +25,14 @@ export function generateFullCoveragePathCases(graph, options = {}) {
     const outgoing = (graph.childrenMap.get(nodeId) || [])
       .filter((edge) => !graph.pageMap.get(edge.to)?.isFloating);
     if (!outgoing.length) {
-      cases.push(createPathCase(graph, nextPages, edges, collection, options.appName));
+      cases.push(
+        createPathCase(graph, nextPages, edges, collection, options.appName, 'scrollLoop'),
+      );
+      if (edges.length) {
+        cases.push(
+          createPathCase(graph, nextPages, edges, collection, options.appName, 'backForwardLoop'),
+        );
+      }
     } else {
       outgoing.forEach((edge) => visit(edge.to, nextPages, [...edges, edge]));
     }
@@ -111,7 +118,7 @@ export function generateMockScenarioCases(graph, count = 80, options = {}) {
   return resolveTestCases(graph, templates);
 }
 
-function createPathCase(graph, pages, edges, collection, appName = '') {
+function createPathCase(graph, pages, edges, collection, appName = '', terminalPattern = 'scrollLoop') {
   const targetPage = pages.at(-1);
   const pathFingerprint = hashPath([
     ...pages.map((page) => page.pageId || page.nodeId),
@@ -125,14 +132,44 @@ function createPathCase(graph, pages, edges, collection, appName = '') {
     expectedPageTitle: graph.pageMap.get(edge.to)?.displayTitle || '',
   }));
   const stableTargetId = targetPage.pageId || targetPage.nodeId;
+  const terminalActions = terminalPattern === 'backForwardLoop'
+    ? [{
+        type: 'back_forward',
+        label: '终点页面返回再进入',
+        target: edgeSteps.at(-1)?.actionLabel || '末级页面入口',
+        repeat: 3,
+        collectDuringAction: true,
+      }]
+    : [
+        {
+          type: 'swipe',
+          label: '终点页面向上浏览',
+          target: targetPage.displayTitle,
+          direction: 'up',
+          durationMs: 420,
+          repeat: 4,
+          collectDuringAction: true,
+        },
+        {
+          type: 'swipe',
+          label: '终点页面向下回滚',
+          target: targetPage.displayTitle,
+          direction: 'down',
+          durationMs: 420,
+          repeat: 3,
+          collectDuringAction: true,
+        },
+      ];
+  const patternLabel = terminalPattern === 'backForwardLoop' ? '返回再进入' : '上下滑动';
   return {
-    caseId: `coverage-path-${stableTargetId}-${pathFingerprint}`,
+    caseId: `coverage-path-${stableTargetId}-${pathFingerprint}-${terminalPattern}`,
     pathFingerprint: pathFingerprint,
-    caseName: `${targetPage.displayTitle} · 终点采集`,
+    caseName: `${targetPage.displayTitle} · ${patternLabel}`,
     caseType: 'path',
     source: 'graphCoverage',
     appName: appName,
-    description: `自动生成的全量覆盖路径，共 ${pages.length} 个页面，到达终点后采集性能。`,
+    terminalPattern,
+    description: `自动生成的全量覆盖路径，共 ${pages.length} 个页面；中间页面仅负责到达，所有动作与性能采集集中在终点页面。`,
     resolved: true,
     pages,
     pageIds: pages.map((page) => page.nodeId),
@@ -140,7 +177,11 @@ function createPathCase(graph, pages, edges, collection, appName = '') {
     edgeIds: edgeSteps.map((edge) => edge.id),
     startPage: pages[0],
     targetPage,
-    collection: { ...collection, metrics: [...collection.metrics] },
+    collection: {
+      ...collection,
+      trigger: 'terminalActionWindow',
+      metrics: [...collection.metrics],
+    },
     steps: [
       ...edgeSteps.map((edge) => ({
         stepNo: edge.stepNo,
@@ -150,11 +191,17 @@ function createPathCase(graph, pages, edges, collection, appName = '') {
         title: `${graph.pageMap.get(edge.from)?.displayTitle || edge.from} · ${edge.actionLabel}`,
         expectedPageId: edge.to,
       })),
+      ...terminalActions.map((action, index) => ({
+        ...action,
+        stepNo: edgeSteps.length + index + 1,
+        pageId: targetPage.nodeId,
+        title: action.label,
+      })),
       {
-        stepNo: edgeSteps.length + 1,
+        stepNo: edgeSteps.length + terminalActions.length + 1,
         type: 'collect',
         pageId: targetPage.nodeId,
-        title: `${targetPage.displayTitle} · 终点性能采集`,
+        title: `${targetPage.displayTitle} · 汇总终点动作性能`,
       },
     ],
   };
