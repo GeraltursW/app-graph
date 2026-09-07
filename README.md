@@ -103,3 +103,4 @@ src/mock/appGraph.ts 内置可交互演示数据
 ## Function Tree
 
 - [Function Tree 前端端到端工作流](docs/function-tree-end-to-end.md)
+- [游离子图归并与图谱建设日报方案](docs/orphan-subgraph-and-daily-report-solution.md)
