@@ -5,6 +5,7 @@ const page = (id: string, title: string, text: string, url: string, children: No
   pageId: id,
   pageTitle: title,
   pageText: text,
+  embeddingText: text,
   pageUrl: url,
   images: [],
   action: {
@@ -214,6 +215,7 @@ export async function mockCreateOrphan(appName: string, pageUrl: string) {
   if (existing) return { status: 'success', created: false, node: clone(existing) };
   const id = `orphan-${Date.now()}`;
   const node = page(id, '待探索页面', '人工创建的游离 URL 页面，等待 AI 探索和截图识别。', pageUrl, [], {
+    embeddingText: '',
     pageInfo: { pageType: 'orphan', isOrphan: true, reviewStatus: 'draft' },
     aiInference: { label: '待探索', reason: '该 URL 尚未归入主图谱。' },
   });
@@ -226,6 +228,8 @@ export async function mockMoveNode(pageId: string, parentId: string) {
   for (const graph of Object.values(store)) {
     const target = findInGraph(graph, parentId);
     if (!target) continue;
+    const source = findInGraph(graph, pageId);
+    if (source && (source.pageId === parentId || findInGraph({ roots: source.children || [], orphanPages: [] }, parentId))) throw new Error('不能将节点移动到自身或后代，图谱禁止环');
     const moved = removeNode(graph.roots, pageId) || removeNode(graph.orphanPages, pageId);
     if (!moved) throw new Error('待移动节点不存在');
     target.children ||= [];
@@ -253,6 +257,7 @@ export async function mockUpdateNode(formData: FormData) {
   if (!node) throw new Error('页面不存在');
   node.pageTitle = String(formData.get('pageTitle') || node.pageTitle);
   node.pageText = String(formData.get('pageText') || '');
+  if (formData.has('embeddingText')) node.embeddingText = String(formData.get('embeddingText'));
   node.pageUrl = String(formData.get('pageUrl') || '');
   node.widgetDescription = String(formData.get('widgetDescription') || '');
   node.aiRecursive = String(formData.get('aiRecursive')) === 'true';
@@ -287,4 +292,64 @@ function deleteNodeOnly(nodes: NodeRecord[], pageId: string): boolean {
 
 function countNodes(nodes: NodeRecord[]): number {
   return nodes.reduce((total, node) => total + 1 + countNodes(node.children || []), 0);
+}
+
+const governanceBatches = new Map<string, any>();
+const graphVersions = new Map<string, { stamp: string; version: number }>();
+function mockVersion(appName: string) {
+  const stamp = JSON.stringify(store[appName]);
+  const previous = graphVersions.get(appName);
+  const version = !previous ? 1 : previous.version + (previous.stamp === stamp ? 0 : 1);
+  graphVersions.set(appName, { stamp, version }); return version;
+}
+export async function mockGovernance(path: string, body: any) {
+  const appName = body.appName, graph = store[appName];
+  if (!graph) throw new Error('应用不存在');
+  const flatten = (nodes: any[], reachable: boolean): any[] => nodes.flatMap(n => [{ ...n, reachable, covered: Boolean(n.embeddingText?.trim()) }, ...flatten(n.children || [], reachable)]);
+  const version = mockVersion(appName);
+  if (path.endsWith('/workbench')) return {
+    graphVersion: version, nodes: [...flatten(graph.roots, true), ...flatten(graph.orphanPages, false)],
+    entries: graph.orphanPages.map(n => ({ ...n, memberPageIds: flatten([n], false).map(x => x.pageId), candidates: [], pendingReason: n.pendingReason || '' })),
+    unresolvedCount: flatten(graph.orphanPages, false).length, unrepresentedCount: 0,
+  };
+  if (path.endsWith('/batchMerge') && governanceBatches.has(body.requestId)) {
+    const old = governanceBatches.get(body.requestId);
+    if (old.request !== JSON.stringify(body)) throw new Error('请求标识重复'); return old.result;
+  }
+  if (body.graphVersion !== version) throw new Error('图谱已变更，请刷新');
+  if (path.endsWith('/rollbackBatch')) {
+    const batch = governanceBatches.get(body.batchId);
+    if (!batch || batch.appName !== appName) throw new Error('批次不存在');
+    if (batch.rolledBack) return { status: 'success' };
+    if (batch.after !== JSON.stringify(graph)) throw new Error('图谱已修改，不能撤销');
+    store[appName] = clone(batch.before); batch.rolledBack = true; return { graphVersion: mockVersion(appName) };
+  }
+  const before = clone(graph);
+  if (path.endsWith('/batchMerge')) {
+    const seen = new Set();
+    for (const item of body.items) {
+      if (seen.has(item.pageId) || !graph.orphanPages.some(n => n.pageId === item.pageId) || !findInGraph({ roots: graph.roots, orphanPages: [] }, item.newParentId) || !item.widgetDescription?.trim()) throw new Error('入口、父节点或控件无效');
+      seen.add(item.pageId);
+    }
+    for (const item of body.items) {
+      const moved = removeNode(graph.orphanPages, item.pageId)!;
+      moved.widgetDescription = item.widgetDescription; delete moved.pendingReason;
+      findInGraph({ roots: graph.roots, orphanPages: [] }, item.newParentId)!.children.push(moved);
+    }
+    const result = { status: 'success', batchId: body.requestId, graphVersion: mockVersion(appName), successCount: body.items.length };
+    governanceBatches.set(body.requestId, { appName, request: JSON.stringify(body), before, after: JSON.stringify(graph), result }); return result;
+  }
+  const entry = graph.orphanPages.find(n => n.pageId === body.pageId);
+  if (!entry) throw new Error('请选择待接入区域入口');
+  if (path.endsWith('/createProvisionalEntry')) { if (!body.reason?.trim()) throw new Error('请输入原因'); entry.pendingReason = body.reason; }
+  else if (path.endsWith('/registerEntry')) { if (!body.evidence?.trim()) throw new Error('请输入入口证据'); graph.roots.push(removeNode(graph.orphanPages, body.pageId)!); }
+  return { graphVersion: mockVersion(appName) };
+}
+
+export function mockCoverageRows() {
+  const rows: any[] = [];
+  for (const [appName, graph] of Object.entries(store)) walk([...graph.roots, ...graph.orphanPages], n => {
+    rows.push({ appName, pageId: n.pageId, pageTitle: n.pageTitle, pageUrl: n.pageUrl, embeddingText: n.embeddingText || '' }); return false;
+  });
+  return rows;
 }

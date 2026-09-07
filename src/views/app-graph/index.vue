@@ -19,6 +19,7 @@ import TestReportDashboard from "./components/TestReportDashboard.vue";
 import TestReportEvidence from "./components/TestReportEvidence.vue";
 import TestReportNav from "./components/TestReportNav.vue";
 import TreeNav from "./components/TreeNav.vue";
+import GovernanceWorkspace from "./components/GovernanceWorkspace.vue";
 import "./style.css";
 import {
   addFloatingPageToGraph,
@@ -101,6 +102,12 @@ const resizingPane = ref("");
 const layoutRevision = ref(0);
 const loading = ref(false);
 const errorMessage = ref("");
+async function locateGovernancePage({ appName: targetApp, pageId }) {
+  if (appName.value !== targetApp) { appName.value = targetApp; await loadGraph(); }
+  const page = graph.value.pages.find(item => item.pageId === pageId);
+  if (!page) { createMessage.warning('该报告节点已变更或删除，请刷新图谱核对'); return; }
+  workMode.value = 'graph'; selectNode(page.nodeId);
+}
 const graph = ref(createEmptyGraph());
 const floatingAiState = ref({});
 const creatingOrphan = ref(false);
@@ -878,6 +885,8 @@ watch(workMode, (value) => {
               {{ loading ? "加载中" : "刷新" }}
             </GraphButton>
           </div>
+
+          <GovernanceWorkspace :app-name="appName" @changed="loadGraph" @locate="locateGovernancePage" />
 
           <a-segmented
             v-if="workMode !== 'reports'"

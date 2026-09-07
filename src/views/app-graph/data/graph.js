@@ -17,6 +17,7 @@ export function applyPageReviewToGraph(graph, nodeId, review = {}) {
       pageTitle,
       displayTitle: page.titleRepeatIndex > 1 ? `${pageTitle} #${page.titleRepeatIndex}` : pageTitle,
       pageText: review.pageText ?? page.pageText,
+      embeddingText: review.embeddingText ?? page.embeddingText,
       pageUrl: review.pageUrl ?? page.pageUrl,
       images: imageUrls,
       imageUrl: imageUrls[0] || "",
@@ -43,6 +44,7 @@ export function normalizeBackendGraph(payload) {
   const edges = [];
   const titleCounts = new Map();
   const visitedPathKeys = new Set();
+  const visitedNodes = new Set();
 
   function walk(rawNode, parentId = null, depth = 1, siblingIndex = 0, path = [], isFloating = false) {
     if (!rawNode || typeof rawNode !== "object") return null;
@@ -55,6 +57,14 @@ export function normalizeBackendGraph(payload) {
     if (visitedPathKeys.has(pathKey)) return stableId;
     visitedPathKeys.add(pathKey);
 
+    if (parentId && !edges.some(edge => edge.from === parentId && edge.to === stableId)) {
+      const widgetDescription = getWidgetDescription(rawNode);
+      edges.push({ id: `${parentId}__${stableId}`, from: parentId, to: stableId,
+        label: widgetDescription || "进入", actionType: "navigate", widgetDescription });
+    }
+    if (visitedNodes.has(stableId)) return stableId;
+    visitedNodes.add(stableId);
+
     const nextTitleCount = (titleCounts.get(rawTitle) || 0) + 1;
     titleCounts.set(rawTitle, nextTitleCount);
 
@@ -65,6 +75,7 @@ export function normalizeBackendGraph(payload) {
       pageId: rawNode.pageId || "",
       pageTitle: rawTitle,
       pageText,
+      embeddingText: rawNode.embeddingText ?? rawNode.embedding_text ?? "",
       images: normalizeImageUrls(rawNode),
       imageUrl: normalizeImageUrls(rawNode)[0] || "",
       imageUrls: normalizeImageUrls(rawNode),
@@ -85,18 +96,6 @@ export function normalizeBackendGraph(payload) {
     };
     pages.push(node);
 
-    if (parentId) {
-      const widgetDescription = getWidgetDescription(rawNode);
-      edges.push({
-        id: `${parentId}__${stableId}`,
-        from: parentId,
-        to: stableId,
-        label: widgetDescription || "进入",
-        actionType: "navigate",
-      widgetDescription
-      });
-    }
-
     node.children.forEach((child, index) => {
       walk(child, stableId, depth + 1, index, [...path, stableId], isFloating);
     });
@@ -106,6 +105,18 @@ export function normalizeBackendGraph(payload) {
 
   rootItems.forEach((node, index) => walk(node, null, 1, index, ["root"], false));
   floatingItems.forEach((node, index) => walk(node, null, 1, index, ["floating"], true));
+
+  if (Array.isArray(graphPayload.edges)) {
+    const pageIds = new Map(pages.map(page => [page.pageId, page.nodeId]));
+    const relations = graphPayload.edges.flatMap(edge => {
+      const from = pageIds.get(edge.fromPageId), to = pageIds.get(edge.toPageId);
+      if (!from || !to) return [];
+      return [{ id: String(edge.id || `${from}__${to}`), from, to,
+        label: edge.widgetDescription || edge.label || "进入",
+        widgetDescription: edge.widgetDescription || "", actionType: edge.actionType || "navigate" }];
+    });
+    edges.splice(0, edges.length, ...relations);
+  }
 
   const pageMap = new Map(pages.map((page) => [page.nodeId, page]));
   const childrenMap = edges.reduce((map, edge) => {

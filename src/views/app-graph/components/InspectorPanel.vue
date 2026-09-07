@@ -160,6 +160,7 @@ function createEmptyForm() {
     pageId: "",
     pageTitle: "",
     pageText: "",
+    embeddingText: "",
     pageUrl: "",
     widgetDescription: "",
     aiRecursive: false,
@@ -182,6 +183,7 @@ function hydrateForm() {
     pageId: page.pageId || "",
     pageTitle: page.pageTitle || "",
     pageText: page.pageText || "",
+    embeddingText: page.embeddingText || "",
     pageUrl: page.pageUrl || "",
     widgetDescription: page.widgetDescription || "",
     aiRecursive: Boolean(page.aiRecursive),
@@ -318,6 +320,7 @@ async function saveEdit() {
     nodeId: form.nodeId,
     pageTitle: form.pageTitle.trim() || "Unnamed Page",
     pageText: form.pageText,
+    embeddingText: form.embeddingText,
     pageUrl: form.pageUrl,
     widgetDescription: form.widgetDescription,
     aiRecursive: form.aiRecursive,
@@ -420,6 +423,10 @@ async function saveEdit() {
             <label>
               AI 页面描述
               <textarea v-model="form.pageText" rows="5" />
+            </label>
+            <label>
+              图片 AI 归类（覆盖依据）
+              <textarea v-model="form.embeddingText" rows="3" />
             </label>
             <div class="review-grid">
               <label>

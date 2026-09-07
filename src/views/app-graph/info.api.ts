@@ -339,6 +339,7 @@ export function requestSavePageReview(page: any, review: any) {
   formData.append('pageId', page.pageId);
   formData.append('pageTitle', review.pageTitle);
   formData.append('pageText', review.pageText || '');
+  if (review.embeddingText !== undefined) formData.append('embeddingText', review.embeddingText);
   formData.append('pageUrl', review.pageUrl || '');
   formData.append('widgetDescription', review.widgetDescription || '');
   formData.append('keepImages', JSON.stringify(review.keepImages || []));
