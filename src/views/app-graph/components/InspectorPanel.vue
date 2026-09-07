@@ -50,6 +50,7 @@ const editMode = computed(() => editorState.value !== "view");
 const saving = computed(() => editorState.value === "saving");
 const saveMessage = ref("");
 const form = reactive(createEmptyForm());
+const imageUploadRef = ref(null);
 const previewImages = computed(() => detail.value?.images || []);
 const previewImage = computed(() => previewImages.value[previewIndex.value] || null);
 
@@ -149,6 +150,7 @@ const detail = computed(() => {
 });
 
 watch(() => props.payload, () => {
+  if (saving.value || (editMode.value && props.payload?.nodeId === form.nodeId)) return;
   previewIndex.value = -1;
   hydrateForm();
   editorState.value = "view";
@@ -195,15 +197,22 @@ function hydrateForm() {
   });
 }
 
-function beginEdit() {
+function beginEdit({ images = false } = {}) {
+  if (saving.value || props.deleting || props.selected.type !== "node" || !props.payload) return;
   hydrateForm();
   editorState.value = "editing";
+  if (images) nextTick(() => {
+    imageUploadRef.value?.scrollIntoView({ block: "center" });
+    imageUploadRef.value?.focus({ preventScroll: true });
+  });
 }
 
 function cancelEdit() {
+  if (saving.value) return;
   hydrateForm();
   editorState.value = "view";
 }
+defineExpose({ beginEdit });
 function imageItem(url, title, kind) {
   return {
     title,
@@ -358,32 +367,21 @@ async function saveEdit() {
         <GraphButton
           v-if="detail?.mode === 'node'"
           class="inspector-edit-toggle"
-          :type="editMode ? 'primary' : 'default'"
+          :disabled="deleting || saving"
           html-type="button"
-          @click="editMode ? cancelEdit() : beginEdit()"
+          @click="beginEdit"
         >
           <template #icon>
-            <Icon :icon="saving ? 'ant-design:loading-outlined' : (editMode ? 'ant-design:close-outlined' : 'ant-design:edit-outlined')" :size="14" />
+            <Icon icon="ant-design:edit-outlined" :size="14" />
           </template>
-          {{ saving ? "保存中" : (editMode ? "取消编辑" : "开启编辑") }}
+          开启编辑
         </GraphButton>
-        <a-popconfirm
-          v-if="detail?.mode === 'node'"
-          title="确认删除该节点？"
-          description="删除后无法恢复，请确认该节点不再需要。"
-          ok-text="删除"
-          cancel-text="取消"
-          placement="bottomRight"
-          :ok-button-props="{ danger: true, loading: deleting }"
-          @confirm="emit('delete-node', payload.nodeId)"
-        >
-          <GraphButton danger html-type="button" :disabled="editMode || deleting">
+          <GraphButton v-if="detail?.mode === 'node'" danger html-type="button" :disabled="editMode || deleting" @click="emit('delete-node', payload.nodeId)">
             <template #icon>
               <Icon :icon="deleting ? 'ant-design:loading-outlined' : 'ant-design:delete-outlined'" :size="14" />
             </template>
             {{ deleting ? "删除中" : "删除" }}
           </GraphButton>
-        </a-popconfirm>
         <span class="panel-chip">AI</span>
       </div>
     </div>
@@ -397,17 +395,24 @@ async function saveEdit() {
           </div>
         </div>
 
-        <Card v-if="editMode && detail.mode === 'node'" class="review-editor">
-          <CardHeader class="replay-card-head">
-            <div class="ai-panel-head">
-              <div>
-                <p class="eyebrow">Review Mode</p>
-                <CardTitle>页面复核编辑</CardTitle>
-              </div>
-              <Badge variant="secondary">Editable</Badge>
-            </div>
-          </CardHeader>
-          <CardContent class="review-editor-content">
+        <a-modal
+          :open="editMode"
+          :title="`编辑页面 · ${form.pageTitle || '未命名页面'}`"
+          width="min(920px, calc(100vw - 32px))"
+          centered
+          :body-style="{ maxHeight: 'min(70vh, calc(100dvh - 180px))', overflowY: 'auto', paddingRight: '8px' }"
+          :mask-closable="false"
+          :closable="!saving"
+          :keyboard="!saving"
+          :destroy-on-close="true"
+          :confirm-loading="saving"
+          :cancel-button-props="{ disabled: saving }"
+          ok-text="保存复核"
+          cancel-text="取消"
+          @ok="saveEdit"
+          @cancel="cancelEdit"
+        >
+          <fieldset class="review-editor-content node-edit-form" :disabled="saving">
             <label>
               页面标题
               <input v-model="form.pageTitle" type="text" />
@@ -528,6 +533,7 @@ async function saveEdit() {
               <div class="image-add-row">
                 <input
                   type="file"
+                  ref="imageUploadRef"
                   accept="image/*"
                   multiple
                   @change="handleNewImages"
@@ -561,19 +567,9 @@ async function saveEdit() {
               </div>
             </section>
 
-            <div class="review-actions">
-              <GraphButton type="primary" html-type="button" :disabled="saving" @click="saveEdit">
-                <template #icon><Icon :icon="saving ? 'ant-design:loading-outlined' : 'ant-design:save-outlined'" :size="14" /></template>
-                {{ saving ? "保存中..." : "保存复核" }}
-              </GraphButton>
-              <GraphButton html-type="button" :disabled="saving" @click="cancelEdit">
-                <template #icon><Icon icon="ant-design:close-outlined" :size="14" /></template>
-                取消
-              </GraphButton>
-              <span v-if="saveMessage">{{ saveMessage }}</span>
-            </div>
-          </CardContent>
-        </Card>
+            <a-alert v-if="saveMessage" :message="saveMessage" type="error" show-icon />
+          </fieldset>
+        </a-modal>
 
         <section v-if="detail.images.length" class="inspector-image-section">
           <div class="inspector-section-title">
@@ -786,3 +782,19 @@ async function saveEdit() {
     </Teleport>
   </aside>
 </template>
+
+<style scoped>
+.node-edit-form { min-width: 0; margin: 0; padding: 0; border: 0; }
+.node-edit-form label { display: grid; gap: 6px; color: #344054; font-size: 13px; font-weight: 500; }
+.node-edit-form input[type="text"], .node-edit-form select, .node-edit-form textarea {
+  width: 100%; min-width: 0; padding: 7px 10px; border: 1px solid #d9d9d9; border-radius: 6px;
+  background: #fff; color: #172033; font: inherit; line-height: 1.5;
+}
+.node-edit-form textarea { resize: vertical; }
+.node-edit-form :is(input, select, textarea):focus-visible { outline: 2px solid #91caff; outline-offset: 1px; }
+.node-edit-form .review-check { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 640px) {
+  .node-edit-form .review-grid, .node-edit-form .action-review-grid { grid-template-columns: 1fr; }
+  .node-edit-form .editable-image-item { grid-template-columns: 54px minmax(0, 1fr); }
+}
+</style>

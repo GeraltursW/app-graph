@@ -3,17 +3,16 @@ import { computed, ref, watch } from 'vue';
 import { Modal, message } from 'ant-design-vue';
 import Icon from '@/components/Icon/Icon.vue';
 import { governanceRequest as api, governanceMock, requestError } from '../governance.api';
-import { queryAppList, buildImageApiUrl } from '../info.api';
+import { buildImageApiUrl } from '../info.api';
 import CoverageTrend from './CoverageTrend.vue';
 
 const props = defineProps<{ appName: string }>();
 const emit = defineEmits(['changed', 'locate']);
 const open = ref(false), tab = ref('daily'), busy = ref(false), error = ref('');
-const reports = ref<any[]>([]), report = ref<any>(null), baseline = ref<any>({ revision: 0, apps: [] });
+const reports = ref<any[]>([]), report = ref<any>(null);
 const workbench = ref<any>({ entries: [], nodes: [], graphVersion: 0 }), selected = ref<string[]>([]), lastBatch = ref('');
 const parents = ref<Record<string, string>>({}), widgets = ref<Record<string, string>>({}), batchParent = ref<string>();
 const group = ref('ALL'), details = ref<any>(null), detailType = ref('ALL'), urlSearch = ref('');
-const editOpen = ref(false), baselineApps = ref<any[]>([]), baselineSource = ref('人工维护');
 const entryOpen = ref(false), entryPage = ref<any>(null), entryKind = ref('PENDING'), entryEvidence = ref('');
 const now = new Date(Date.now() + 8 * 3600000);
 const defaultDate = new Date(now.getTime() - (now.getUTCHours() < 8 ? 86400000 : 0));
@@ -22,17 +21,18 @@ const reportType = ref(now.getUTCHours() >= 8 && now.getUTCHours() < 20 ? 'MORNI
 const appRows = computed(() => (report.value?.apps || []).filter((a: any) => group.value === 'ALL' || a.appGroups.includes(group.value)));
 const parentOptions = computed(() => workbench.value.nodes.filter((n: any) => n.reachable).map((n: any) => ({ label: `${n.pageTitle} · ${n.pageUrl}`, value: n.pageId })));
 const percent = (n: number, d: number) => d > 0 ? `${(n / d * 100).toFixed(2)}%` : '—';
+const baselineCovered = (app: any) => app.baselineCoveredCount ?? app.coveredUrlCount;
 const summary = computed(() => {
-  const valid = appRows.value.filter((a: any) => a.totalUrlCount > 0), nonzero = valid.filter((a: any) => a.coveredUrlCount > 0);
+  const valid = appRows.value.filter((a: any) => a.totalUrlCount > 0), nonzero = valid.filter((a: any) => baselineCovered(a) > 0);
   const sum = (items: any[], field: string) => items.reduce((s, a) => s + Number(a[field] || 0), 0);
-  const ratio = (items: any[]) => percent(items.reduce((s, a) => s + Math.min(a.coveredUrlCount, a.totalUrlCount), 0), sum(items, 'totalUrlCount'));
+  const ratio = (items: any[]) => percent(items.reduce((s, a) => s + Math.min(baselineCovered(a), a.totalUrlCount), 0), sum(items, 'totalUrlCount'));
   return [ ['新增 URL', sum(appRows.value, 'newUrlCount')], ['涉及 APP', appRows.value.filter((a: any) => a.newUrlCount > 0).length], ['高频覆盖率', percent(sum(appRows.value, 'priorityCoveredCount'), sum(appRows.value, 'priorityUrlCount'))], ['全量覆盖率', ratio(valid)], ['全量覆盖率（去 0）', ratio(nonzero)] ];
 });
 const detailRows = computed(() => (details.value?.urls || []).filter((u: any) => (!urlSearch.value || u.pageUrl.includes(urlSearch.value)) && (detailType.value === 'ALL' || detailType.value === 'NEW' && u.isNew || detailType.value === 'PRIORITY' && u.priority || detailType.value === 'GAP' && u.priority && !u.covered)));
 const columns = [
   { title: 'APP 名称', key: 'appName', dataIndex: 'appName', width: 130, fixed: 'left' },
-  { title: '节点数', dataIndex: 'nodeCount', width: 85 }, { title: '全量 URL', dataIndex: 'totalUrlCount', key: 'total', width: 100 },
-  { title: '游离 URL', dataIndex: 'orphanUrlCount', width: 95 }, { title: '已覆盖 URL', dataIndex: 'coveredUrlCount', width: 110 },
+  { title: '节点数', dataIndex: 'nodeCount', width: 85 }, { title: '基线 URL', dataIndex: 'totalUrlCount', key: 'total', width: 100 },
+  { title: '游离 URL', dataIndex: 'orphanUrlCount', width: 95 }, { title: '基线已覆盖', key: 'covered', width: 110 },
   { title: '全量覆盖率', key: 'rate', width: 110 }, { title: '高频 URL', dataIndex: 'priorityUrlCount', width: 100 },
   { title: '已覆盖高频', dataIndex: 'priorityCoveredCount', width: 110 }, { title: '高频覆盖率', key: 'priorityRate', width: 110 },
   { title: '三方功能数', key: 'functions', width: 100 }, { title: '特殊说明', dataIndex: 'specialNote', width: 190, ellipsis: true },
@@ -48,25 +48,12 @@ async function reloadWorkbench() {
   selected.value = [];
 }
 async function refresh() {
-  await run(async () => { baseline.value = await api('/reports/baselines/current'); reports.value = await api('/reports/daily'); report.value ||= reports.value[0] || null; await reloadWorkbench(); });
+  await run(async () => { reports.value = await api('/reports/daily'); report.value ||= reports.value[0] || null; await reloadWorkbench(); });
 }
 function launch(mode: string) { tab.value = mode; open.value = true; refresh(); }
 watch(() => props.appName, () => { parents.value = {}; widgets.value = {}; lastBatch.value = ''; if (open.value) run(reloadWorkbench); });
 async function generate() {
   await run(async () => { report.value = await api('/reports/generate', { requestId: crypto.randomUUID(), date: date.value, reportType: reportType.value }, 'post'); reports.value = await api('/reports/daily'); message.success('日报已生成'); });
-}
-async function editBaseline() {
-  await run(async () => {
-    baseline.value = await api('/reports/baselines/current'); const apps = await queryAppList();
-    baselineApps.value = apps.map((a: any) => { const old = baseline.value.apps.find((b: any) => b.appName === a.appName); return { appName: a.appName, appGroups: [], totalUrlCount: null, specialNote: '', ...old, priorityText: (old?.priorityUrls || []).join('\n') }; });
-    baselineSource.value = baseline.value.source || '人工维护'; editOpen.value = true;
-  });
-}
-function publish() {
-  Modal.confirm({ title: '发布新的日报基准？', content: '后续报告使用新版本，已发布报告保持原数据。', onOk: () => run(async () => {
-    await api('/reports/baselines/publish', { requestId: crypto.randomUUID(), expectedRevision: baseline.value.revision, source: baselineSource.value, apps: baselineApps.value.map(a => ({ appName: a.appName, appGroups: a.appGroups, totalUrlCount: a.totalUrlCount, specialNote: a.specialNote, priorityUrls: [...new Set(a.priorityText.split('\n').map((u: string) => u.replace(/\r$/, '')).filter((u: string) => u.trim()))] })) }, 'post');
-    baseline.value = await api('/reports/baselines/current'); editOpen.value = false; message.success('基准已发布');
-  }) });
 }
 function assignParent() { if (batchParent.value) selected.value.forEach(id => parents.value[id] = batchParent.value!); }
 function merge() {
@@ -91,9 +78,9 @@ function locate(appName: string, pageId: string) { open.value = false; details.v
 function exportHtml() {
   if (!report.value) return;
   const escape = (value: any) => String(value ?? '—').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-  const rows = appRows.value.map((a: any) => `<tr><td>${escape(a.appName)}</td><td>${a.newUrlCount}</td><td>${a.nodeCount}</td><td>${a.coveredUrlCount}</td><td>${escape(a.totalUrlCount)}</td><td>${percent(Math.min(a.coveredUrlCount, a.totalUrlCount), a.totalUrlCount)}</td></tr>`).join('');
+  const rows = appRows.value.map((a: any) => `<tr><td>${escape(a.appName)}</td><td>${a.newUrlCount}</td><td>${a.nodeCount}</td><td>${baselineCovered(a)}</td><td>${escape(a.totalUrlCount)}</td><td>${percent(Math.min(baselineCovered(a), a.totalUrlCount), a.totalUrlCount)}</td></tr>`).join('');
   const urls = appRows.value.map((a: any) => `<details><summary>${escape(a.appName)} URL 明细</summary><ul>${a.urls.map((u: any) => `<li>${escape(u.pageUrl)} · ${u.covered ? '已覆盖' : '未覆盖'} · ${escape(u.firstCoverageTime)}</li>`).join('')}</ul></details>`).join('');
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>知识图谱建设日报</title><style>body{font:14px system-ui;margin:24px;color:#172033;background:#f5f7fa}table{width:100%;border-collapse:collapse;background:white}td,th{text-align:left;padding:12px;border-bottom:1px solid #ddd}details{padding:16px;background:white;margin-top:12px}li{overflow-wrap:anywhere}</style><h1>知识图谱建设日报 ${escape(report.value.date)}</h1><p>生成时间 ${escape(report.value.generatedAt)} · 基准版本 ${report.value.baselineRevision} · ${escape(group.value)}</p><p>新增区间 ${escape(report.value.periodStart)} 至 ${escape(report.value.periodEnd)}</p><table><tr><th>APP</th><th>新增 URL</th><th>节点数</th><th>已覆盖 URL</th><th>全量 URL</th><th>覆盖率</th></tr>${rows}</table>${urls}</html>`;
+  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>知识图谱建设日报</title><style>body{font:14px system-ui;margin:24px;color:#172033;background:#f5f7fa}table{width:100%;border-collapse:collapse;background:white}td,th{text-align:left;padding:12px;border-bottom:1px solid #ddd}details{padding:16px;background:white;margin-top:12px}li{overflow-wrap:anywhere}</style><h1>知识图谱建设日报 ${escape(report.value.date)}</h1><p>生成时间 ${escape(report.value.generatedAt)} · ${escape(group.value)}</p><p>新增区间 ${escape(report.value.periodStart)} 至 ${escape(report.value.periodEnd)}</p><table><tr><th>APP</th><th>新增 URL</th><th>节点数</th><th>基线已覆盖</th><th>基线 URL</th><th>覆盖率</th></tr>${rows}</table>${urls}</html>`;
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })), link = document.createElement('a'); link.href = url; link.download = `图谱日报-${report.value.date}.html`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 </script>
@@ -112,11 +99,11 @@ function exportHtml() {
           <input v-model="date" type="date" aria-label="报告日期" />
           <a-segmented v-model:value="reportType" :options="[{value:'MORNING',label:'早报'},{value:'EVENING',label:'晚报'}]" />
           <a-button type="primary" :loading="busy" @click="generate">生成日报</a-button>
-          <a-button :disabled="busy" @click="editBaseline">基准维护</a-button><a-button :disabled="!report" @click="exportHtml">导出 HTML</a-button>
-          <a-select :value="report?.reportId" placeholder="历史报告" style="min-width:240px" :options="reports.map(r=>({value:r.reportId,label:`${r.date} ${r.reportType==='MORNING'?'早报':'晚报'} · v${r.baselineRevision}`}))" @change="(id:string)=>report=reports.find(r=>r.reportId===id)" />
+          <a-button :disabled="!report" @click="exportHtml">导出 HTML</a-button>
+          <a-select :value="report?.reportId" placeholder="历史报告" style="min-width:240px" :options="reports.map(r=>({value:r.reportId,label:`${r.date} ${r.reportType==='MORNING'?'早报':'晚报'}`}))" @change="(id:string)=>report=reports.find(r=>r.reportId===id)" />
           <a-segmented v-model:value="group" :options="[{value:'ALL',label:'全部'},{value:'TOP',label:'TOP'},{value:'TGI',label:'TGI'}]" />
         </div>
-        <p class="gov-meta">当前基准 v{{ baseline.revision }} · {{ baseline.source || '未配置' }}<template v-if="report"> · 报告基准 v{{ report.baselineRevision }} · 生成于 {{ new Date(report.generatedAt).toLocaleString() }}</template></p>
+        <p class="gov-meta">项目 URL 基线<template v-if="report"> · 生成于 {{ new Date(report.generatedAt).toLocaleString() }}</template></p>
         <template v-if="report">
           <div class="gov-stats"><a-statistic v-for="[label,value] in summary" :key="label" :title="label" :value="value" /></div>
           <CoverageTrend :reports="reports" :group="group" />
@@ -124,7 +111,8 @@ function exportHtml() {
             <template #bodyCell="{column,record}">
               <a-button v-if="column.key==='appName'" type="link" @click="details=record;detailType='ALL';urlSearch=''">{{ record.appName }}</a-button>
               <template v-else-if="column.key==='total'">{{ record.totalUrlCount ?? '未配置' }}</template>
-              <template v-else-if="column.key==='rate'">{{ percent(Math.min(record.coveredUrlCount,record.totalUrlCount),record.totalUrlCount) }}</template>
+              <template v-else-if="column.key==='covered'">{{ baselineCovered(record) }}</template>
+              <template v-else-if="column.key==='rate'">{{ percent(Math.min(baselineCovered(record),record.totalUrlCount),record.totalUrlCount) }}</template>
               <template v-else-if="column.key==='priorityRate'">{{ percent(record.priorityCoveredCount,record.priorityUrlCount) }}</template>
               <template v-else-if="column.key==='functions'">{{ record.functionCount ?? '未查询' }}</template>
             </template>
@@ -153,12 +141,6 @@ function exportHtml() {
       <template #bodyCell="{column,record}"><a-tag v-if="column.key==='covered'" :color="record.covered?'blue':'default'">{{ record.covered?'已覆盖':'未覆盖' }}</a-tag><template v-else-if="column.key==='locate'"><a-button v-for="id in record.pageIds" :key="id" type="link" size="small" @click="locate(details.appName,id)">定位 {{ record.pageIds.length>1?id:'' }}</a-button><span v-if="!record.pageIds.length">无当前节点</span></template></template>
     </a-table>
   </a-drawer>
-  <a-modal v-model:open="editOpen" title="日报基准维护" width="min(1000px,94vw)" :confirm-loading="busy" ok-text="发布" @ok="publish">
-    <a-form layout="vertical"><a-form-item label="数据来源"><a-input v-model:value="baselineSource" /></a-form-item></a-form>
-    <a-collapse><a-collapse-panel v-for="app in baselineApps" :key="app.appName" :header="app.appName">
-      <a-form layout="vertical"><div class="gov-form-grid"><a-form-item label="应用分组"><a-select v-model:value="app.appGroups" mode="multiple" :options="[{value:'TOP'},{value:'TGI'}]" /></a-form-item><a-form-item label="全量 URL 数"><a-input-number v-model:value="app.totalUrlCount" :min="0" :precision="0" placeholder="未配置" /></a-form-item></div><a-form-item label="高频 URL（每行一条，精确匹配）"><a-textarea v-model:value="app.priorityText" :rows="6" /></a-form-item><a-form-item label="特殊说明"><a-input v-model:value="app.specialNote" /></a-form-item></a-form>
-    </a-collapse-panel></a-collapse>
-  </a-modal>
   <a-modal v-model:open="entryOpen" :title="entryPage?.pageTitle" :confirm-loading="busy" ok-text="保存" @ok="saveEntry">
     <a-form layout="vertical"><a-form-item label="入口类型"><a-select v-model:value="entryKind" :options="[{value:'PENDING',label:'尚未找到入口'},{value:'APP_HOME',label:'确认是应用启动页'},{value:'DEEPLINK',label:'Deep Link'},{value:'NOTIFICATION',label:'通知入口'},{value:'SYSTEM_INTENT',label:'系统 Intent'},{value:'EXTERNAL_APP',label:'其他应用唤起'}]" /></a-form-item><a-form-item :label="entryKind==='PENDING'?'待确认原因':'真实入口证据'" required><a-textarea v-model:value="entryEvidence" :rows="4" /></a-form-item></a-form>
   </a-modal>

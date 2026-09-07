@@ -37,6 +37,16 @@ export function applyPageReviewToGraph(graph, nodeId, review = {}) {
   return rebuildGraphIndexes({ ...graph, pages });
 }
 
+export function getMainGraphView(graph) {
+  const pages = graph.pages.filter(page => !page.isFloating);
+  const ids = new Set(pages.map(page => page.nodeId));
+  return rebuildGraphIndexes({
+    ...graph,
+    pages,
+    edges: graph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to))
+  });
+}
+
 export function normalizeBackendGraph(payload) {
   const graphPayload = payload?.data || payload?.result || payload;
   const { rootItems, floatingItems } = splitGraphPayload(graphPayload);

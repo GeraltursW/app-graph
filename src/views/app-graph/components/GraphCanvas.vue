@@ -29,10 +29,13 @@ const props = defineProps({
   selected: { type: Object, required: true },
   layoutMode: { type: String, default: 'horizontal' },
   layoutRevision: { type: Number, default: 0 },
+  mutationBusy: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['select-node', 'select-edge']);
+const emit = defineEmits(['select-node', 'select-edge', 'node-menu']);
 const containerRef = ref(null);
+const contextMenu = ref(null);
+const contextMenuRef = ref(null);
 const previewPage = ref(null);
 const collapsed = ref(new Set());
 const rendering = ref(false);
@@ -71,6 +74,38 @@ const previewCandidates = computed(() => {
   const image = normalizeImageUrls(previewPage.value || {})[0];
   return image ? [buildImageApiUrl(image)] : [];
 });
+
+function closeContextMenu() { contextMenu.value = null; }
+function dismissContextMenu(event) {
+  if (!contextMenuRef.value?.contains(event.target)) closeContextMenu();
+}
+function handleMenuKey(event) {
+  if (event.key === 'Escape' && contextMenu.value) {
+    closeContextMenu(); containerRef.value?.focus({ preventScroll: true });
+  }
+}
+async function showContextMenu(event) {
+  event.preventDefault?.();
+  const page = props.graph.pageMap.get(event.target.id);
+  if (!page || props.loading || rendering.value) return;
+  hoveredPage.value = null;
+  const menu = { nodeId: page.nodeId, title: page.displayTitle, x: event.client.x, y: event.client.y };
+  contextMenu.value = menu;
+  await nextTick();
+  if (contextMenu.value?.nodeId !== menu.nodeId) return;
+  const rect = contextMenuRef.value?.getBoundingClientRect();
+  contextMenu.value.x = Math.max(8, Math.min(menu.x, window.innerWidth - (rect?.width || 220) - 8));
+  contextMenu.value.y = Math.max(8, Math.min(menu.y, window.innerHeight - (rect?.height || 270) - 8));
+  contextMenuRef.value?.querySelector('[role="menuitem"]')?.focus();
+}
+function chooseContextAction({ key }) {
+  const nodeId = contextMenu.value?.nodeId;
+  closeContextMenu();
+  const page = props.graph.pageMap.get(nodeId);
+  if (!page) return;
+  if (key === 'preview') { openPreview(page); return; }
+  if (!props.mutationBusy) emit('node-menu', { key, nodeId });
+}
 
 function resolveClusterKey(page) {
   if (page.isFloating) return 'floating';
@@ -453,7 +488,11 @@ function createGraph() {
     plugins: [{ type: 'minimap', key: 'minimap', size: [168, 104] }],
   });
 
-  graphInstance.on(NodeEvent.CLICK, (event) => emit('select-node', event.target.id));
+  graphInstance.on(NodeEvent.CLICK, (event) => {
+    if (event.button != null && event.button !== 0) return;
+    emit('select-node', event.target.id);
+  });
+  graphInstance.on(NodeEvent.CONTEXT_MENU, showContextMenu);
   graphInstance.on(NodeEvent.POINTER_ENTER, (event) => {
     hoveredPage.value = props.graph.pageMap.get(event.target.id) || null;
   });
@@ -461,12 +500,14 @@ function createGraph() {
     hoveredPage.value = null;
   });
   graphInstance.on(NodeEvent.DBLCLICK, (event) => {
+    if (event.button != null && event.button !== 0) return;
     const page = props.graph.pageMap.get(event.target.id);
     if (page) openPreview(page);
   });
   graphInstance.on(EdgeEvent.CLICK, (event) => emit('select-edge', event.target.id));
   graphInstance.on(GraphEvent.AFTER_TRANSFORM, () => {
     hoveredPage.value = null;
+    closeContextMenu();
   });
 }
 
@@ -524,7 +565,12 @@ async function performRender({ fit = false } = {}) {
   rendering.value = true;
   try {
     selectedElement = null;
-    graphInstance.setData(toG6Data());
+    const data = toG6Data();
+    graphInstance.setData(data);
+    if (!data.nodes.length) {
+      await graphInstance.draw();
+      return;
+    }
     graphInstance.setLayout(getLayout());
     graphInstance.setOptions({
       behaviors: getBehaviors(),
@@ -594,7 +640,7 @@ function queueSelectionSync() {
 }
 
 async function fitReadableView() {
-  if (!graphInstance) return;
+  if (!graphInstance || !graphInstance.getNodeData().length) return;
   await graphInstance.fitView({ when: 'always', direction: 'both' }, { duration: 360 });
   if (props.graph.pages.length > 120) {
     if (graphInstance.getZoom() < 0.32) {
@@ -617,7 +663,7 @@ async function fitReadableView() {
 }
 
 async function fitGraph() {
-  if (!graphInstance) return;
+  if (!graphInstance || !graphInstance.getNodeData().length) return;
   await graphInstance.fitView({ when: 'always', direction: 'both' }, { duration: 420 });
 }
 
@@ -649,6 +695,7 @@ async function exportGraph() {
 defineExpose({ fitGraph, expandAll, collapseAll, resetLayout, exportGraph });
 
 watch(() => [props.layoutMode, props.layoutRevision, props.graph], () => {
+  closeContextMenu();
   nextTick(() => renderGraph({ fit: true }));
 }, { deep: false });
 
@@ -672,6 +719,10 @@ watch(() => props.selected, () => {
 }, { deep: true });
 
 onMounted(async () => {
+  document.addEventListener('pointerdown', dismissContextMenu, true);
+  document.addEventListener('keydown', handleMenuKey);
+  window.addEventListener('resize', closeContextMenu);
+  window.addEventListener('blur', closeContextMenu);
   await renderGraph({ fit: true });
   resizeObserver = new ResizeObserver(() => {
     if (resizeTimer) window.clearTimeout(resizeTimer);
@@ -684,6 +735,10 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', dismissContextMenu, true);
+  document.removeEventListener('keydown', handleMenuKey);
+  window.removeEventListener('resize', closeContextMenu);
+  window.removeEventListener('blur', closeContextMenu);
   if (presentationTimer) window.clearTimeout(presentationTimer);
   if (resizeTimer) window.clearTimeout(resizeTimer);
   resizeObserver?.disconnect();
@@ -705,7 +760,6 @@ onBeforeUnmount(() => {
     <div class="canvas-stats" aria-label="图谱统计">
       <div class="stat"><span>节点</span><strong>{{ graph.pages.length }}</strong></div>
       <div class="stat"><span>跳转</span><strong>{{ graph.edges.length }}</strong></div>
-      <div class="stat"><span>游离</span><strong>{{ graph.floatingPages.length }}</strong></div>
       <div class="stat"><span>引擎</span><strong>G6</strong></div>
     </div>
     <div v-if="functionHighlightActive" class="canvas-function-filter">
@@ -723,7 +777,8 @@ onBeforeUnmount(() => {
       </em>
     </div>
 
-    <div ref="containerRef" class="g6-canvas" />
+    <div ref="containerRef" class="g6-canvas" tabindex="-1" @contextmenu.prevent />
+    <a-empty v-if="!loading && !graph.pages.length" class="canvas-empty-state" description="暂无主树页面" />
     <div v-if="hoveredPage" class="graph-node-tooltip">
       <strong>{{ hoveredPage.displayTitle }}</strong>
       <p>{{ hoveredPage.pageText || '暂无页面描述' }}</p>
@@ -734,6 +789,19 @@ onBeforeUnmount(() => {
     </div>
 
     <Teleport to="body">
+      <div v-if="contextMenu" ref="contextMenuRef" class="graph-context-menu"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        @contextmenu.prevent @wheel.stop>
+        <div class="graph-context-menu-title">{{ contextMenu.title }}</div>
+        <a-menu :selectable="false" @click="chooseContextAction" aria-label="节点操作">
+          <a-menu-item key="preview"><Icon icon="ant-design:expand-outlined" /> 查看截图</a-menu-item>
+          <a-menu-item key="edit" :disabled="mutationBusy"><Icon icon="ant-design:edit-outlined" /> 编辑节点</a-menu-item>
+          <a-menu-item key="images" :disabled="mutationBusy"><Icon icon="ant-design:picture-outlined" /> 添加截图</a-menu-item>
+          <a-menu-item key="create" :disabled="mutationBusy"><Icon icon="ant-design:plus-outlined" /> 新建游离节点</a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="delete" danger :disabled="mutationBusy"><Icon icon="ant-design:delete-outlined" /> 删除节点</a-menu-item>
+        </a-menu>
+      </div>
       <div v-if="previewPage" class="image-preview-overlay" @click="previewPage = null">
         <div class="image-preview-shell" @click.stop>
           <GraphButton
@@ -757,3 +825,10 @@ onBeforeUnmount(() => {
     </Teleport>
   </section>
 </template>
+
+<style scoped>
+.canvas-empty-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.graph-context-menu { position: fixed; z-index: 1050; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 8px 28px #17203326; }
+.graph-context-menu-title { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #697586; font-size: 12px; overflow-wrap: anywhere; }
+.graph-context-menu :deep(.ant-menu) { border: 0; }
+</style>

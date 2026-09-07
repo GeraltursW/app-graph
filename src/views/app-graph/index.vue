@@ -1,12 +1,13 @@
 <script setup>
 import Icon from '@/components/Icon/Icon.vue';
 import { useMessage } from '@/hooks/web/useMessage';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   Segmented as ASegmented,
   Select as ASelect,
   SelectOption as ASelectOption,
-  Tag as ATag
+  Tag as ATag,
+  Modal
 } from "ant-design-vue";
 import GraphButton from "./components/shared/GraphButton.vue";
 import GraphCanvas from "./components/GraphCanvas.vue";
@@ -20,11 +21,14 @@ import TestReportEvidence from "./components/TestReportEvidence.vue";
 import TestReportNav from "./components/TestReportNav.vue";
 import TreeNav from "./components/TreeNav.vue";
 import GovernanceWorkspace from "./components/GovernanceWorkspace.vue";
+import ProjectBaselinePanel from "./components/ProjectBaselinePanel.vue";
+import CaptureImportPanel from "./components/CaptureImportPanel.vue";
 import "./style.css";
 import {
   addFloatingPageToGraph,
   applyPageReviewToGraph,
   createEmptyGraph,
+  getMainGraphView,
   mergeFloatingPageIntoGraph,
   normalizeBackendGraph
 } from "./data/graph.js";
@@ -95,6 +99,9 @@ let caseExecutionTimer = null;
 const layoutMode = ref("horizontal");
 const toolAction = ref("");
 const graphRef = ref(null);
+const inspectorRef = ref(null);
+const treeNavRef = ref(null);
+const deleteConfirmOpen = ref(false);
 const shellRef = ref(null);
 const leftPaneWidth = ref(280);
 const rightPaneWidth = ref(380);
@@ -109,6 +116,7 @@ async function locateGovernancePage({ appName: targetApp, pageId }) {
   workMode.value = 'graph'; selectNode(page.nodeId);
 }
 const graph = ref(createEmptyGraph());
+const canvasGraph = computed(() => getMainGraphView(graph.value));
 const floatingAiState = ref({});
 const creatingOrphan = ref(false);
 const movingNodeId = ref("");
@@ -690,6 +698,38 @@ async function moveTreeNode({ nodeId, targetParentId }) {
   }
 }
 
+function confirmDeleteNode(nodeId) {
+  const page = graph.value.pageMap.get(nodeId);
+  if (!page || deletingNodeId.value || deleteConfirmOpen.value) return;
+  const targetApp = appName.value;
+  deleteConfirmOpen.value = true;
+  Modal.confirm({
+    title: `确认删除「${page.pageTitle}」？`,
+    content: `URL：${page.pageUrl || '未填写'}。删除无法撤销，相关连线将由后端同步处理。`,
+    okText: '删除节点', cancelText: '取消', okButtonProps: { danger: true },
+    maskClosable: false,
+    onOk: async () => {
+      if (targetApp !== appName.value || graph.value.pageMap.get(nodeId)?.pageId !== page.pageId) {
+        createMessage.warning('当前图谱已变化，请重新选择节点'); return;
+      }
+      await deleteNode(nodeId);
+    },
+    afterClose: () => { deleteConfirmOpen.value = false; },
+  });
+}
+
+async function handleNodeMenu({ key, nodeId }) {
+  if (loading.value || deletingNodeId.value) return;
+  workMode.value = 'graph';
+  selectedOfficialFunction.value = null;
+  if (key === 'create') { await nextTick(); treeNavRef.value?.openCreateDialog(); return; }
+  if (!graph.value.pageMap.has(nodeId)) return;
+  selectNode(nodeId);
+  if (key === 'delete') { confirmDeleteNode(nodeId); return; }
+  await nextTick();
+  inspectorRef.value?.beginEdit({ images: key === 'images' });
+}
+
 async function deleteNode(nodeId) {
   const page = graph.value.pageMap.get(nodeId);
   if (!page || deletingNodeId.value) return;
@@ -707,6 +747,7 @@ async function deleteNode(nodeId) {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "节点删除失败";
     createMessage.error({ content: errorMessage.value, key: "app-graph-delete-node", duration: 3 });
+    throw error;
   } finally {
     deletingNodeId.value = "";
   }
@@ -886,8 +927,6 @@ watch(workMode, (value) => {
             </GraphButton>
           </div>
 
-          <GovernanceWorkspace :app-name="appName" @changed="loadGraph" @locate="locateGovernancePage" />
-
           <a-segmented
             v-if="workMode !== 'reports'"
             v-model:value="layoutMode"
@@ -905,9 +944,15 @@ watch(workMode, (value) => {
             @change="handleToolAction"
           />
         </div>
+        <div class="topbar-project-actions" role="group" aria-label="项目管理">
+          <ProjectBaselinePanel />
+          <CaptureImportPanel :app-name="appName" @changed="loadGraph" @locate="locateGovernancePage" />
+          <GovernanceWorkspace :app-name="appName" @changed="loadGraph" @locate="locateGovernancePage" />
+        </div>
       </header>
     <TreeNav
       v-if="workMode === 'graph'"
+      ref="treeNavRef"
       v-model:keyword="keyword"
       v-model:ai-graph-highlighted="aiGraphHighlighted"
       :graph="graph"
@@ -968,9 +1013,9 @@ watch(workMode, (value) => {
       <GraphCanvas
         v-if="workMode !== 'reports'"
         ref="graphRef"
-        :graph="graph"
+        :graph="canvasGraph"
         :loading="loading"
-
+        :mutation-busy="Boolean(deletingNodeId) || creatingOrphan || Boolean(movingNodeId)"
         :layout-mode="layoutMode"
         :layout-revision="layoutRevision"
         :keyword="keyword"
@@ -983,6 +1028,7 @@ watch(workMode, (value) => {
         :case-execution="caseExecution"
         @select-node="selectNode"
         @select-edge="selectEdge"
+        @node-menu="handleNodeMenu"
       />
       <TestReportDashboard
         v-else-if="activeUrlReport"
@@ -1013,13 +1059,14 @@ watch(workMode, (value) => {
     />
     <InspectorPanel
       v-else-if="workMode === 'graph'"
+      ref="inspectorRef"
       :deleting="Boolean(deletingNodeId)"
       :function-action-bindings="confirmedFunctionActionMap"
       :graph="graph"
       :selected="selected"
       :payload="selectedPayload"
       @save-page-review="savePageReview"
-      @delete-node="deleteNode"
+      @delete-node="confirmDeleteNode"
     />
     <TestCasePanel
       v-else-if="workMode === 'cases'"

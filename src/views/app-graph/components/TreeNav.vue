@@ -130,6 +130,7 @@ function openCreateDialog() {
   createUrlError.value = "";
   createDialogOpen.value = true;
 }
+defineExpose({ openCreateDialog });
 
 async function submitFloatingUrl() {
   if (props.creatingOrphan) return;

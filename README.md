@@ -1,5 +1,14 @@
 # Application Map Demo
 
+## 最新交接文档
+
+- [2026-09-07 迭代总结](docs/20260907-daily-summary.md)
+- [前端复刻与续开发提示词](docs/frontend-agent-reproduction-prompt.md)：可完整发送给其他 Agent，包含布局、风格、交互和接口约束。
+- [项目 URL 基线](docs/20260907-project-url-baseline.md)
+- [人工采集包导入](docs/20260907-manual-capture-import.md)
+
+当前源码使用 Ant Design Vue 与 AntV G6；历史说明如有冲突，以以上交接文档和当前源码为准。
+
 第三方移动应用页面关系图谱独立演示项目。该版本从 Vben Admin 的 `app-graph` 视图中抽离，可直接运行，不需要登录、数据库或后端服务。
 
 ## 快速运行

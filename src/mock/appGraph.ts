@@ -255,6 +255,15 @@ export async function mockUpdateNode(formData: FormData) {
   let node: NodeRecord | null = null;
   for (const appName of Object.keys(store)) node ||= findNode(appName, pageId);
   if (!node) throw new Error('页面不存在');
+  const keepImages = JSON.parse(String(formData.get('keepImages') || '[]'));
+  if (!Array.isArray(keepImages)) throw new Error('保留图片必须是数组');
+  const uploadedImages = await Promise.all(formData.getAll('newImages').filter((file): file is File => file instanceof File).map(file => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('读取上传图片失败'));
+    reader.readAsDataURL(file);
+  })));
+  node.images = [...keepImages, ...uploadedImages];
   node.pageTitle = String(formData.get('pageTitle') || node.pageTitle);
   node.pageText = String(formData.get('pageText') || '');
   if (formData.has('embeddingText')) node.embeddingText = String(formData.get('embeddingText'));
@@ -352,4 +361,37 @@ export function mockCoverageRows() {
     rows.push({ appName, pageId: n.pageId, pageTitle: n.pageTitle, pageUrl: n.pageUrl, embeddingText: n.embeddingText || '' }); return false;
   });
   return rows;
+}
+
+export function mockCommitCapture(appName: string, items: any[], previous: Record<string,string>, jobId: string) {
+  if (!items.length || items.length > 500) throw new Error('选择 1 至 500 条记录');
+  const graph = clone(store[appName]), targets = new Map<string, NodeRecord>();
+  for (const item of items) {
+    if (!item.pageTitle?.trim() || item.pageTitle.length > 255) throw new Error('请填写有效页面标题');
+    let node = item.targetPageId ? findInGraph(graph, item.targetPageId) : null;
+    if (item.targetPageId && !node) throw new Error('目标页面不存在');
+    if (!node) {
+      const id = `capture-${jobId}-${item.recordId}`;
+      node = page(id, item.pageTitle, item.pageText || '', item.payload.pageUrl, [], { embeddingText: item.embeddingText || '' });
+      graph.orphanPages.push(node);
+    }
+    node.images = [...new Set([...(node.images || []), item.payload.pageImage])];
+    node.pageText = item.pageText || '';node.embeddingText = item.embeddingText || '';
+    targets.set(item.recordId, node);
+  }
+  for (const item of items) {
+    if (item.mode === 'orphan') continue;
+    if (item.mode !== 'link' || !item.widgetDescription?.trim() || !['tap','longPress','swipe','back'].includes(item.actionType)) throw new Error('请填写关系控件和操作类型');
+    const parent = item.parentPageId ? findInGraph(graph, item.parentPageId) : targets.get(item.previousRecordId) || findInGraph(graph, previous[item.previousRecordId]);
+    const child = targets.get(item.recordId)!;
+    if (!parent || parent.pageId === child.pageId || findInGraph({roots: child.children || [], orphanPages: []}, parent.pageId)) throw new Error('父节点无效或关系形成环');
+    if (item.parentPageId && item.previousRecordId) throw new Error('父节点与前一步记录只可选一项');
+    // The demo tree cannot retain a second parent safely; real backend supports DAG edges.
+    if (!graph.orphanPages.some(n => n.pageId === child.pageId)) throw new Error('演示模式不支持给已接入节点增加第二条入口，请使用真实后端');
+    removeNode(graph.orphanPages, child.pageId);child.widgetDescription = item.widgetDescription;
+    parent.children ||= [];parent.children.push(child);
+  }
+  const pages = items.map(item => ({ recordId: item.recordId, pageId: targets.get(item.recordId)!.pageId, reachable: !!findInGraph({roots:graph.roots,orphanPages:[]},targets.get(item.recordId)!.pageId) }));
+  store[appName] = graph;
+  return { status: 'success', savedCount: items.length, edgeCount: items.filter(i=>i.mode==='link').length, pages };
 }

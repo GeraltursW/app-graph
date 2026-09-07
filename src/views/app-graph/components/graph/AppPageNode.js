@@ -11,6 +11,7 @@ class AppPageNode extends Rect {
   bindClick(shape, callback) {
     if (!shape || shape.__appGraphClickBound) return;
     shape.addEventListener('click', (event) => {
+      if (event.button != null && event.button !== 0) return;
       event.stopPropagation();
       callback?.();
     });

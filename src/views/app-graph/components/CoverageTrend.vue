@@ -9,7 +9,7 @@ function render() {
   const values = rows.map(r => {
     const apps = r.apps.filter((a: any) => props.group === 'ALL' || a.appGroups.includes(props.group));
     const valid = apps.filter((a: any) => a.totalUrlCount > 0), denominator = valid.reduce((s: number, a: any) => s + a.totalUrlCount, 0);
-    return { newCount: apps.reduce((s: number, a: any) => s + a.newUrlCount, 0), rate: denominator ? +(valid.reduce((s: number, a: any) => s + Math.min(a.coveredUrlCount, a.totalUrlCount), 0) / denominator * 100).toFixed(2) : null };
+    return { newCount: apps.reduce((s: number, a: any) => s + a.newUrlCount, 0), rate: denominator ? +(valid.reduce((s: number, a: any) => s + Math.min(a.baselineCoveredCount ?? a.coveredUrlCount, a.totalUrlCount), 0) / denominator * 100).toFixed(2) : null };
   });
   chart.setOption({ tooltip: { trigger: 'axis' }, legend: { data: ['新增 URL', '全量覆盖率'] }, grid: { left: 55, right: 55, top: 45, bottom: 50 },
     xAxis: { type: 'category', data: rows.map(r => `${r.date} ${r.reportType === 'MORNING' ? '早' : '晚'}`) },
