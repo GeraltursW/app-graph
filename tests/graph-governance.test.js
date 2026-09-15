@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getMainGraphView, normalizeBackendGraph } from '../src/views/app-graph/data/graph.js';
+import { getMainGraphView, normalizeBackendGraph } from '../src/views/app-graph/graph/graph.data.js';
 
 const page = (id, children = []) => ({ id, pageId: String(id), pageTitle: `Page ${id}`, children });
 

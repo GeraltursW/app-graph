@@ -9,20 +9,20 @@ import {
   Tag as ATag,
   Modal
 } from "ant-design-vue";
-import GraphButton from "./components/shared/GraphButton.vue";
-import GraphCanvas from "./components/GraphCanvas.vue";
-import FunctionReviewPanel from "./components/FunctionReviewPanel.vue";
-import FunctionTreeImportDialog from "./components/FunctionTreeImportDialog.vue";
-import InspectorPanel from "./components/InspectorPanel.vue";
-import TestCaseNav from "./components/TestCaseNav.vue";
-import TestCasePanel from "./components/TestCasePanel.vue";
-import TestReportDashboard from "./components/TestReportDashboard.vue";
-import TestReportEvidence from "./components/TestReportEvidence.vue";
-import TestReportNav from "./components/TestReportNav.vue";
-import TreeNav from "./components/TreeNav.vue";
-import GovernanceWorkspace from "./components/GovernanceWorkspace.vue";
-import ProjectBaselinePanel from "./components/ProjectBaselinePanel.vue";
-import CaptureImportPanel from "./components/CaptureImportPanel.vue";
+import GraphButton from "./shared/GraphButton.vue";
+import GraphCanvas from "./graph/GraphCanvas.vue";
+import FunctionReviewPanel from "./function-tree/FunctionReviewPanel.vue";
+import FunctionTreeImportDialog from "./function-tree/FunctionTreeImportDialog.vue";
+import InspectorPanel from "./graph/InspectorPanel.vue";
+import TestCaseNav from "./test-case/TestCaseNav.vue";
+import TestCasePanel from "./test-case/TestCasePanel.vue";
+import TestReportDashboard from "./test-report/TestReportDashboard.vue";
+import TestReportEvidence from "./test-report/TestReportEvidence.vue";
+import TestReportNav from "./test-report/TestReportNav.vue";
+import TreeNav from "./graph/TreeNav.vue";
+import GovernanceWorkspace from "./governance/GovernanceWorkspace.vue";
+import ProjectBaselinePanel from "./baseline/ProjectBaselinePanel.vue";
+import CaptureImportPanel from "./capture-import/CaptureImportPanel.vue";
 import "./style.css";
 import {
   addFloatingPageToGraph,
@@ -31,45 +31,46 @@ import {
   getMainGraphView,
   mergeFloatingPageIntoGraph,
   normalizeBackendGraph
-} from "./data/graph.js";
+} from "./graph/graph.data.js";
 import {
   createMockPerformanceResult,
   generateFullCoveragePathCases,
   generateMockScenarioCases,
   resolveTestCases
-} from "./data/testCases.js";
-import { createMockTestReport } from "./data/testReports.js";
+} from "./test-case/testCase.data.js";
+import { createMockTestReport } from "./test-report/testReport.mock.js";
 import {
   queryFunctionBindings,
   queryFunctionCatalog,
   queryFunctionCatalogs,
   queryFunctionCoverage,
   queryFunctionMatchRuns,
-  queryAppGraph,
-  queryAppList,
-  requestAiExploreFloatingPage,
-  requestCreateOrphanNode,
-  requestDeleteNode,
-  requestManualMergeFloatingPage,
-  requestMergeFloatingPage,
-  requestMoveNode,
   requestImportFunctionTree,
   requestReviewFunctionBinding,
   requestReviewFunctionBindings,
   requestRunFunctionMatch,
-  requestSavePageReview
-} from "./info.api";
+} from './function-tree/functionTree.api';
+import {
+  queryAppGraph,
+  queryAppList,
+  requestDeleteNode,
+  requestMoveNode,
+  requestSavePageReview,
+} from './graph/graph.api';
+import {
+  requestAiExploreFloatingPage,
+  requestCreateOrphanNode,
+  requestManualMergeFloatingPage,
+  requestMergeFloatingPage,
+} from './orphans/orphan.api';
 import {
   createEmptyFunctionCatalog,
   createFunctionCatalogView
-} from "./data/functionTree";
-import {
-  getOfficialFunctionCatalog,
-  getTestCaseCatalog,
-  layoutModes,
-  toolActions,
-  workModes
-} from "./info.data";
+} from "./function-tree/functionTree.data";
+import { getOfficialFunctionCatalog } from './function-tree/functionTree.mock';
+import { getTestCaseCatalog } from './test-case/testCase.mock';
+import { layoutModes, toolActions } from './graph/graph.config';
+import { workModes } from './workspace.config';
 
 const appName = ref("");
 const appList = ref([]);

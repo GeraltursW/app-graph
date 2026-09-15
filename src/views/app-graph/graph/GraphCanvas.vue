@@ -1,0 +1,834 @@
+<script setup>
+import Icon from '@/components/Icon/Icon.vue';
+import {
+  EdgeEvent,
+  Graph,
+  GraphEvent,
+  NodeEvent,
+} from '@antv/g6';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { buildGraphThumbnailApiUrl, buildImageApiUrl } from '../shared/image.api';
+import { getOutgoingEdges, normalizeImageUrls } from './graph.data.js';
+import { registerAppPageNode } from './nodes/AppPageNode.js';
+import GraphButton from '../shared/GraphButton.vue';
+import SmartImage from '../shared/SmartImage.vue';
+
+const props = defineProps({
+  graph: { type: Object, required: true },
+  loading: { type: Boolean, default: false },
+  keyword: { type: String, default: '' },
+  aiGraphHighlighted: { type: Boolean, default: false },
+  functionHighlightActive: { type: Boolean, default: false },
+  functionHighlightLabel: { type: String, default: '' },
+  highlightedPageIds: { type: Array, default: () => [] },
+  testCase: { type: Object, default: null },
+  caseExecution: {
+    type: Object,
+    default: () => ({ caseId: "", status: "idle", currentStep: 0, result: null }),
+  },
+  selected: { type: Object, required: true },
+  layoutMode: { type: String, default: 'horizontal' },
+  layoutRevision: { type: Number, default: 0 },
+  mutationBusy: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(['select-node', 'select-edge', 'node-menu']);
+const containerRef = ref(null);
+const contextMenu = ref(null);
+const contextMenuRef = ref(null);
+const previewPage = ref(null);
+const collapsed = ref(new Set());
+const rendering = ref(false);
+let graphInstance = null;
+let resizeObserver = null;
+let resizeTimer = null;
+let presentationTimer = null;
+let renderSequence = 0;
+let selectedElement = null;
+let renderQueue = Promise.resolve();
+let preparedGraphKey = '';
+
+const clusterTones = [
+  { accent: '#1769e0', stroke: '#78aef2', fill: '#dcecff', surface: '#edf6ff' },
+  { accent: '#087ea4', stroke: '#67bfd3', fill: '#d9f2f7', surface: '#ebf9fb' },
+  { accent: '#4f46e5', stroke: '#9b96f4', fill: '#e7e5ff', surface: '#f1f0ff' },
+  { accent: '#16845b', stroke: '#73c6a7', fill: '#ddf5eb', surface: '#eefaf5' },
+  { accent: '#be3f68', stroke: '#e49ab2', fill: '#f9e2ea', surface: '#fdf1f5' },
+];
+const floatingTone = { accent: '#b7791f', stroke: '#e7bd63', fill: '#fff0c9', surface: '#fff8e7' };
+
+const normalizedKeyword = computed(() => props.keyword.trim().toLowerCase());
+const largeGraph = computed(() => props.graph.pages.length > 120);
+const hoveredPage = ref(null);
+const caseMode = computed(() => Boolean(props.testCase));
+const caseEdgeStepMap = computed(() => new Map(
+  (props.testCase?.edgeSteps || []).map((edge) => [edge.id, edge.stepNo]),
+));
+const caseNodeStepMap = computed(() => new Map(
+  (props.testCase?.pageIds || []).map((nodeId, index) => [nodeId, index + 1]),
+));
+const functionPageIdSet = computed(() => new Set(props.highlightedPageIds));
+const testCasePageIdSet = computed(() => new Set(props.testCase?.pageIds || []));
+const rootIds = computed(() => [...props.graph.roots, ...props.graph.floatingRoots]);
+const previewCandidates = computed(() => {
+  const image = normalizeImageUrls(previewPage.value || {})[0];
+  return image ? [buildImageApiUrl(image)] : [];
+});
+
+function closeContextMenu() { contextMenu.value = null; }
+function dismissContextMenu(event) {
+  if (!contextMenuRef.value?.contains(event.target)) closeContextMenu();
+}
+function handleMenuKey(event) {
+  if (event.key === 'Escape' && contextMenu.value) {
+    closeContextMenu(); containerRef.value?.focus({ preventScroll: true });
+  }
+}
+async function showContextMenu(event) {
+  event.preventDefault?.();
+  const page = props.graph.pageMap.get(event.target.id);
+  if (!page || props.loading || rendering.value) return;
+  hoveredPage.value = null;
+  const menu = { nodeId: page.nodeId, title: page.displayTitle, x: event.client.x, y: event.client.y };
+  contextMenu.value = menu;
+  await nextTick();
+  if (contextMenu.value?.nodeId !== menu.nodeId) return;
+  const rect = contextMenuRef.value?.getBoundingClientRect();
+  contextMenu.value.x = Math.max(8, Math.min(menu.x, window.innerWidth - (rect?.width || 220) - 8));
+  contextMenu.value.y = Math.max(8, Math.min(menu.y, window.innerHeight - (rect?.height || 270) - 8));
+  contextMenuRef.value?.querySelector('[role="menuitem"]')?.focus();
+}
+function chooseContextAction({ key }) {
+  const nodeId = contextMenu.value?.nodeId;
+  closeContextMenu();
+  const page = props.graph.pageMap.get(nodeId);
+  if (!page) return;
+  if (key === 'preview') { openPreview(page); return; }
+  if (!props.mutationBusy) emit('node-menu', { key, nodeId });
+}
+
+function resolveClusterKey(page) {
+  if (page.isFloating) return 'floating';
+  let cursor = page;
+  while (cursor?.parentId) {
+    const parent = props.graph.pageMap.get(cursor.parentId);
+    if (!parent || parent.level <= 1) return cursor.nodeId;
+    cursor = parent;
+  }
+  return 'root';
+}
+
+const clusterContext = computed(() => {
+  const nodeKeys = new Map();
+  const orderedKeys = [];
+  const seenKeys = new Set();
+  props.graph.pages.forEach((page) => {
+    const key = resolveClusterKey(page);
+    nodeKeys.set(page.nodeId, key);
+    if (key !== 'root' && key !== 'floating' && !seenKeys.has(key)) {
+      seenKeys.add(key);
+      orderedKeys.push(key);
+    }
+  });
+  const tones = new Map([
+    ['root', clusterTones[0]],
+    ['floating', floatingTone],
+  ]);
+  orderedKeys.forEach((key, index) => tones.set(key, clusterTones[index % clusterTones.length]));
+  return { nodeKeys, tones };
+});
+
+function searchableText(page) {
+  return [
+    page.pageTitle,
+    page.displayTitle,
+    page.pageText,
+    page.pageUrl,
+    page.aiInference?.label,
+    page.aiInference?.reason,
+    JSON.stringify(page.pageInfo || {}),
+  ].join(' ').toLowerCase();
+}
+
+function formatEdgeControlLabel(edge = {}) {
+  const label = String(edge.label || edge.widgetDescription || '进入').trim();
+  const controlName = label.replace(/^(点击|轻触|打开|进入)/, '').trim() || label;
+  return controlName.length > 8 ? `${controlName.slice(0, 8)}...` : controlName;
+}
+
+function shouldShowEdgeControl(edge = {}) {
+  if (props.graph.pages.length <= 120) return true;
+  if (rootIds.value.includes(edge.from)) return true;
+  return Boolean(props.selected?.id)
+    && (edge.id === props.selected.id || edge.from === props.selected.id || edge.to === props.selected.id);
+}
+
+function getVisibleIds() {
+  const visible = new Set();
+  const visiting = new Set();
+  const visit = (nodeId) => {
+    if (!nodeId || visible.has(nodeId) || visiting.has(nodeId)) return;
+    visiting.add(nodeId);
+    visible.add(nodeId);
+    if (!collapsed.value.has(nodeId)) {
+      getOutgoingEdges(props.graph, nodeId).forEach((edge) => visit(edge.to));
+    }
+    visiting.delete(nodeId);
+  };
+  rootIds.value.forEach(visit);
+  return visible;
+}
+
+function prepareGraphVisibility() {
+  const graphKey = [
+    props.graph.pages.length,
+    props.graph.edges.length,
+    ...props.graph.roots,
+    ...props.graph.floatingRoots,
+  ].join(':');
+  if (preparedGraphKey === graphKey) return;
+  preparedGraphKey = graphKey;
+  collapsed.value = props.graph.pages.length > 120
+    ? new Set(props.graph.pages
+        .filter((page) => page.level === 2 && !page.isFloating && getOutgoingEdges(props.graph, page.nodeId).length)
+        .map((page) => page.nodeId))
+    : new Set();
+}
+
+function prepareCaseVisibility() {
+  if (!props.testCase?.pageIds?.length) return;
+  const next = new Set(collapsed.value);
+  props.testCase.pageIds.forEach((nodeId) => {
+    let cursor = props.graph.pageMap.get(nodeId);
+    while (cursor) {
+      next.delete(cursor.nodeId);
+      cursor = cursor.parentId ? props.graph.pageMap.get(cursor.parentId) : null;
+    }
+  });
+  collapsed.value = next;
+}
+
+function getNodeSize() {
+  return [196, 258];
+}
+
+function getClusterKey(page) {
+  return clusterContext.value.nodeKeys.get(page.nodeId) || 'root';
+}
+
+function getClusterTone(clusterKey) {
+  return clusterContext.value.tones.get(clusterKey) || clusterTones[0];
+}
+
+function getClusterLabel(clusterKey) {
+  if (clusterKey === 'floating') return '游离 URL';
+  return props.graph.pageMap.get(clusterKey)?.displayTitle || '功能分区';
+}
+
+function toggleCollapse(nodeId) {
+  const next = new Set(collapsed.value);
+  if (next.has(nodeId)) next.delete(nodeId);
+  else next.add(nodeId);
+  collapsed.value = next;
+  renderGraph({ fit: true });
+}
+
+function openPreview(page) {
+  previewPage.value = page;
+}
+
+function toG6Data() {
+  const visibleIds = getVisibleIds();
+  const keyword = normalizedKeyword.value;
+  const functionPageIds = functionPageIdSet.value;
+  const testCasePageIds = testCasePageIdSet.value;
+  const [width, height] = getNodeSize();
+  const visiblePages = props.graph.pages.filter((page) => visibleIds.has(page.nodeId));
+  const clusterCounts = visiblePages.reduce((counts, page) => {
+    const clusterKey = getClusterKey(page);
+    if (clusterKey !== 'root') counts.set(clusterKey, (counts.get(clusterKey) || 0) + 1);
+    return counts;
+  }, new Map());
+  return {
+    nodes: visiblePages
+      .map((page) => {
+        const outgoingCount = getOutgoingEdges(props.graph, page.nodeId).length;
+        const firstImage = normalizeImageUrls(page)[0];
+        const clusterKey = getClusterKey(page);
+        const tone = getClusterTone(clusterKey);
+        const caseStep = caseNodeStepMap.value.get(page.nodeId) || 0;
+        const caseRole = getCaseNodeRole(page.nodeId, caseStep);
+        const caseActive = getActiveCaseNodeId() === page.nodeId;
+        return {
+          id: page.nodeId,
+          combo: clusterKey === 'root' ? undefined : `cluster:${clusterKey}`,
+          data: { page, clusterKey },
+          style: {
+            size: [width, height],
+            title: page.displayTitle,
+            description: page.pageText,
+            pageUrl: page.pageUrl,
+            imageSrc: firstImage ? buildGraphThumbnailApiUrl(firstImage) : '',
+            metaText: `L${page.level}  ${outgoingCount} 个下级`,
+            outgoingCount,
+            collapsed: collapsed.value.has(page.nodeId),
+            floating: page.isFloating,
+            compact: largeGraph.value,
+            accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
+            badgeText: caseActive
+              ? '执行中'
+              : caseRole || (page.aiRecursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
+            aiRecursive: page.aiRecursive,
+            caseRole,
+            caseStep,
+            caseActive,
+            matched: (!keyword || searchableText(page).includes(keyword))
+              && (!props.aiGraphHighlighted || page.aiRecursive)
+              && (!props.functionHighlightActive || functionPageIds.has(page.nodeId))
+              && (!caseMode.value || testCasePageIds.has(page.nodeId)),
+            onPreview: () => openPreview(page),
+            onToggle: () => toggleCollapse(page.nodeId),
+          },
+        };
+      }),
+    edges: props.graph.edges
+      .filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to))
+      .map((edge) => ({
+        id: edge.id,
+        source: edge.from,
+        target: edge.to,
+        data: edge,
+        style: {
+          caseStep: caseEdgeStepMap.value.get(edge.id) || 0,
+          caseActive: caseEdgeStepMap.value.get(edge.id) === props.caseExecution.currentStep
+            && props.caseExecution.status === 'running',
+        },
+      })),
+    combos: [...clusterCounts.entries()].map(([clusterKey, count]) => ({
+      id: `cluster:${clusterKey}`,
+      data: {
+        label: getClusterLabel(clusterKey),
+        count,
+        tone: getClusterTone(clusterKey),
+      },
+    })),
+  };
+}
+
+function getCaseNodeRole(nodeId, step) {
+  if (!props.testCase || !step) return '';
+  if (props.testCase.caseType === 'scenario') return '场景';
+  if (nodeId === props.testCase.startPage?.nodeId) return '起点';
+  if (nodeId === props.testCase.targetPage?.nodeId) return '采集';
+  return `步骤${step}`;
+}
+
+function getActiveCaseNodeId() {
+  if (!props.testCase || props.caseExecution.caseId !== props.testCase.caseId) return '';
+  if (props.caseExecution.status !== 'running') return '';
+  const current = props.testCase.steps?.[props.caseExecution.currentStep - 1];
+  return current?.pageId || '';
+}
+
+function getLayout() {
+  const [width, height] = getNodeSize();
+  if (props.layoutMode === 'radial') {
+    return {
+      type: 'combo-combined',
+      nodeSize: [width, height],
+      comboPadding: 70,
+      spacing: 120,
+      animation: false,
+      preLayout: true,
+    };
+  }
+  return {
+    type: 'dagre',
+    rankdir: props.layoutMode === 'vertical' ? 'TB' : 'LR',
+    nodeSize: [width, height],
+    nodesep: 74,
+    ranksep: 170,
+    ranker: largeGraph.value ? 'tight-tree' : 'network-simplex',
+    animation: false,
+    preLayout: true,
+  };
+}
+
+function getBehaviors() {
+  const behaviors = [
+    'drag-canvas',
+    'zoom-canvas',
+    'drag-element',
+    {
+      key: 'optimize-large-viewport',
+      type: 'optimize-viewport-transform',
+      enable: () => largeGraph.value,
+      debounce: 120,
+      shapes: {
+        node: ['key', 'header'],
+        edge: [],
+        combo: ['key'],
+      },
+    },
+  ];
+  if (!largeGraph.value) {
+    behaviors.push(
+    {
+      key: 'keep-controls-readable',
+      type: 'fix-element-size',
+      enable: true,
+      reset: true,
+      node: [{ shape: 'key', fields: ['lineWidth'] }],
+      edge: [{ shape: 'key', fields: ['lineWidth'] }, { shape: 'label' }],
+      combo: [{ shape: 'key', fields: ['lineWidth'] }, { shape: 'label' }],
+    },
+    );
+  }
+  return behaviors;
+}
+
+function createGraph() {
+  if (!containerRef.value || graphInstance) return;
+  const nodeType = registerAppPageNode();
+  graphInstance = new Graph({
+    container: containerRef.value,
+    autoResize: false,
+    padding: 56,
+    data: toG6Data(),
+    layout: getLayout(),
+    node: {
+      type: nodeType,
+      style: {
+        fill: (datum) => getClusterTone(datum.data.clusterKey).surface,
+        stroke: (datum) => datum.style.caseActive
+          ? '#16a34a'
+          : datum.style.caseRole
+            ? '#2563eb'
+            : datum.data.page.aiRecursive
+              ? '#eab308'
+              : datum.data.page.isFloating ? '#f59e0b' : '#b9c9dc',
+        lineWidth: (datum) => datum.style.caseActive
+          ? 4
+          : datum.style.caseRole || datum.data.page.aiRecursive || datum.data.page.isFloating ? 2 : 1.5,
+        radius: 6,
+        shadowColor: 'rgba(40, 79, 128, 0.15)',
+        shadowBlur: () => largeGraph.value ? 0 : 12,
+        shadowOffsetY: 4,
+        opacity: (datum) => datum.style.matched ? 1 : 0.24,
+        cursor: 'pointer',
+        port: true,
+        ports: [{ placement: 'left' }, { placement: 'right' }, { placement: 'top' }, { placement: 'bottom' }],
+      },
+      state: {
+        selected: { stroke: '#1677ff', lineWidth: 3, shadowColor: 'rgba(22, 119, 255, 0.3)', shadowBlur: 18 },
+      },
+      animation: false,
+    },
+    combo: {
+      type: 'rect',
+      style: {
+        fill: (datum) => datum.data.tone.fill,
+        fillOpacity: 0.32,
+        stroke: (datum) => datum.data.tone.stroke,
+        strokeOpacity: 0.88,
+        lineWidth: 2,
+        lineDash: [8, 6],
+        radius: 10,
+        padding: [54, 28, 30, 28],
+        labelText: (datum) => `${datum.data.label} · ${datum.data.count}`,
+        labelPlacement: 'top-left',
+        labelFill: '#ffffff',
+        labelFontSize: 15,
+        labelFontWeight: 700,
+        labelBackground: true,
+        labelBackgroundFill: (datum) => datum.data.tone.accent,
+        labelBackgroundOpacity: 1,
+        labelBackgroundRadius: 5,
+        labelBackgroundPadding: [6, 10],
+      },
+      animation: false,
+    },
+    edge: {
+      type: (datum) => props.layoutMode === 'radial' ? 'line' : 'polyline',
+      style: {
+        stroke: (datum) => datum.style.caseActive
+          ? '#16a34a'
+          : datum.style.caseStep ? '#2563eb' : '#6d8fba',
+        strokeOpacity: (datum) => caseMode.value && !datum.style.caseStep ? 0.16 : 1,
+        lineWidth: (datum) => datum.style.caseActive ? 4 : datum.style.caseStep ? 3 : 1.8,
+        endArrow: true,
+        endArrowSize: 8,
+        labelText: (datum) => datum.style.caseStep
+          ? `${String(datum.style.caseStep).padStart(2, '0')} ${formatEdgeControlLabel(datum.data)}`
+          : shouldShowEdgeControl(datum.data) ? formatEdgeControlLabel(datum.data) : '',
+        labelPlacement: 0.68,
+        labelAutoRotate: false,
+        labelFill: '#ffffff',
+        labelFontSize: 13,
+        labelFontWeight: 700,
+        labelBackground: true,
+        labelBackgroundFill: (datum) => {
+          const sourcePage = props.graph.pageMap.get(datum.data.from);
+          if (datum.style.caseActive) return '#16a34a';
+          if (datum.style.caseStep) return '#2563eb';
+          return getClusterTone(sourcePage ? getClusterKey(sourcePage) : 'root').accent;
+        },
+        labelBackgroundStroke: '#ffffff',
+        labelBackgroundLineWidth: 2,
+        labelBackgroundRadius: 5,
+        labelPadding: [5, 9],
+        cursor: 'pointer',
+      },
+      state: {
+        selected: { stroke: '#1769e0', lineWidth: 4 },
+      },
+      animation: false,
+    },
+    behaviors: getBehaviors(),
+    plugins: [{ type: 'minimap', key: 'minimap', size: [168, 104] }],
+  });
+
+  graphInstance.on(NodeEvent.CLICK, (event) => {
+    if (event.button != null && event.button !== 0) return;
+    emit('select-node', event.target.id);
+  });
+  graphInstance.on(NodeEvent.CONTEXT_MENU, showContextMenu);
+  graphInstance.on(NodeEvent.POINTER_ENTER, (event) => {
+    hoveredPage.value = props.graph.pageMap.get(event.target.id) || null;
+  });
+  graphInstance.on(NodeEvent.POINTER_LEAVE, () => {
+    hoveredPage.value = null;
+  });
+  graphInstance.on(NodeEvent.DBLCLICK, (event) => {
+    if (event.button != null && event.button !== 0) return;
+    const page = props.graph.pageMap.get(event.target.id);
+    if (page) openPreview(page);
+  });
+  graphInstance.on(EdgeEvent.CLICK, (event) => emit('select-edge', event.target.id));
+  graphInstance.on(GraphEvent.AFTER_TRANSFORM, () => {
+    hoveredPage.value = null;
+    closeContextMenu();
+  });
+}
+
+function getNodePresentationStyle(page) {
+  const keyword = normalizedKeyword.value;
+  const functionPageIds = functionPageIdSet.value;
+  const testCasePageIds = testCasePageIdSet.value;
+  const clusterKey = getClusterKey(page);
+  const tone = getClusterTone(clusterKey);
+  const caseStep = caseNodeStepMap.value.get(page.nodeId) || 0;
+  const caseRole = getCaseNodeRole(page.nodeId, caseStep);
+  const caseActive = getActiveCaseNodeId() === page.nodeId;
+  return {
+    compact: largeGraph.value,
+    accentColor: caseActive ? '#16a34a' : caseRole ? '#2563eb' : tone.accent,
+    badgeText: caseActive
+      ? '执行中'
+      : caseRole || (page.aiRecursive ? 'AI 推断' : page.isFloating ? '游离' : ''),
+    caseRole,
+    caseStep,
+    caseActive,
+    matched: (!keyword || searchableText(page).includes(keyword))
+      && (!props.aiGraphHighlighted || page.aiRecursive)
+      && (!props.functionHighlightActive || functionPageIds.has(page.nodeId))
+      && (!caseMode.value || testCasePageIds.has(page.nodeId)),
+  };
+}
+
+async function updateGraphPresentation() {
+  if (!graphInstance) return;
+  const currentNodeIds = new Set(graphInstance.getNodeData().map((node) => node.id));
+  const currentEdgeIds = new Set(graphInstance.getEdgeData().map((edge) => edge.id));
+  graphInstance.updateNodeData(props.graph.pages
+    .filter((page) => currentNodeIds.has(page.nodeId))
+    .map((page) => ({ id: page.nodeId, style: getNodePresentationStyle(page) })));
+  graphInstance.updateEdgeData(props.graph.edges
+    .filter((edge) => currentEdgeIds.has(edge.id))
+    .map((edge) => ({
+      id: edge.id,
+      style: {
+        caseStep: caseEdgeStepMap.value.get(edge.id) || 0,
+        caseActive: caseEdgeStepMap.value.get(edge.id) === props.caseExecution.currentStep
+          && props.caseExecution.status === 'running',
+      },
+    })));
+  await graphInstance.draw();
+}
+
+async function performRender({ fit = false } = {}) {
+  prepareGraphVisibility();
+  prepareCaseVisibility();
+  createGraph();
+  if (!graphInstance) return;
+  const sequence = ++renderSequence;
+  rendering.value = true;
+  try {
+    selectedElement = null;
+    const data = toG6Data();
+    graphInstance.setData(data);
+    if (!data.nodes.length) {
+      await graphInstance.draw();
+      return;
+    }
+    graphInstance.setLayout(getLayout());
+    graphInstance.setOptions({
+      behaviors: getBehaviors(),
+    });
+    await graphInstance.render();
+    if (sequence !== renderSequence) return;
+    await syncSelection(false);
+    if (fit) await fitReadableView();
+  } finally {
+    if (sequence === renderSequence) rendering.value = false;
+  }
+}
+
+function renderGraph(options = {}) {
+  if (presentationTimer) {
+    window.clearTimeout(presentationTimer);
+    presentationTimer = null;
+  }
+  renderQueue = renderQueue
+    .catch(() => undefined)
+    .then(() => performRender(options));
+  return renderQueue;
+}
+
+function queuePresentationUpdate() {
+  if (presentationTimer) window.clearTimeout(presentationTimer);
+  presentationTimer = window.setTimeout(() => {
+    presentationTimer = null;
+    renderQueue = renderQueue
+      .catch(() => undefined)
+      .then(updateGraphPresentation);
+  }, 90);
+}
+
+async function syncSelection(focus = true) {
+  if (!graphInstance) return;
+  if (selectedElement?.id) {
+    await graphInstance.setElementState(selectedElement.id, []);
+  }
+  if (!props.selected?.id) {
+    selectedElement = null;
+    return;
+  }
+  const visibleIds = getVisibleIds();
+  const exists = props.selected.type === 'edge'
+    ? props.graph.edges.some((edge) => (
+        edge.id === props.selected.id
+        && visibleIds.has(edge.from)
+        && visibleIds.has(edge.to)
+      ))
+    : visibleIds.has(props.selected.id);
+  if (!exists) return;
+  selectedElement = props.selected;
+  await graphInstance.setElementState(props.selected.id, ['selected']);
+  if (focus && props.selected.type === 'node') {
+    await graphInstance.focusElement(props.selected.id, { duration: 420 });
+  }
+}
+
+function queueSelectionSync() {
+  renderQueue = renderQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await syncSelection(true);
+    });
+  return renderQueue;
+}
+
+async function fitReadableView() {
+  if (!graphInstance || !graphInstance.getNodeData().length) return;
+  await graphInstance.fitView({ when: 'always', direction: 'both' }, { duration: 360 });
+  if (props.graph.pages.length > 120) {
+    if (graphInstance.getZoom() < 0.32) {
+      await graphInstance.zoomTo(0.32, { duration: 280 });
+    }
+    const primaryRoot = rootIds.value.find((id) => !props.graph.pageMap.get(id)?.isFloating);
+    if (primaryRoot) await graphInstance.focusElement(primaryRoot, { duration: 280 });
+    return;
+  }
+  if (graphInstance.getZoom() >= 0.52) return;
+  await graphInstance.zoomTo(0.4, { duration: 280 });
+  const visibleIds = getVisibleIds();
+  const primaryRoot = rootIds.value.find((id) => visibleIds.has(id));
+  const focusIds = primaryRoot
+    ? [primaryRoot, ...getOutgoingEdges(props.graph, primaryRoot)
+        .map((edge) => edge.to)
+        .filter((id) => visibleIds.has(id))]
+    : [];
+  if (focusIds.length) await graphInstance.focusElement(focusIds, { duration: 280 });
+}
+
+async function fitGraph() {
+  if (!graphInstance || !graphInstance.getNodeData().length) return;
+  await graphInstance.fitView({ when: 'always', direction: 'both' }, { duration: 420 });
+}
+
+async function expandAll() {
+  collapsed.value = new Set();
+  await renderGraph({ fit: true });
+}
+
+async function collapseAll() {
+  collapsed.value = new Set(props.graph.pages
+    .filter((page) => getOutgoingEdges(props.graph, page.nodeId).length > 0)
+    .map((page) => page.nodeId));
+  await renderGraph({ fit: true });
+}
+
+async function resetLayout() {
+  await renderGraph({ fit: true });
+}
+
+async function exportGraph() {
+  if (!graphInstance) return;
+  const dataUrl = await graphInstance.toDataURL({ mode: 'overall', type: 'image/png' });
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `app-graph-${Date.now()}.png`;
+  link.click();
+}
+
+defineExpose({ fitGraph, expandAll, collapseAll, resetLayout, exportGraph });
+
+watch(() => [props.layoutMode, props.layoutRevision, props.graph], () => {
+  closeContextMenu();
+  nextTick(() => renderGraph({ fit: true }));
+}, { deep: false });
+
+watch(() => [
+  props.keyword,
+  props.aiGraphHighlighted,
+  props.functionHighlightActive,
+  props.highlightedPageIds,
+  props.caseExecution.currentStep,
+  props.caseExecution.status,
+], () => {
+  nextTick(queuePresentationUpdate);
+}, { deep: false });
+
+watch(() => props.testCase, () => {
+  nextTick(() => renderGraph({ fit: true }));
+}, { deep: true });
+
+watch(() => props.selected, () => {
+  nextTick(queueSelectionSync);
+}, { deep: true });
+
+onMounted(async () => {
+  document.addEventListener('pointerdown', dismissContextMenu, true);
+  document.addEventListener('keydown', handleMenuKey);
+  window.addEventListener('resize', closeContextMenu);
+  window.addEventListener('blur', closeContextMenu);
+  await renderGraph({ fit: true });
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeTimer) window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      resizeTimer = null;
+      graphInstance?.resize();
+    }, 80);
+  });
+  if (containerRef.value) resizeObserver.observe(containerRef.value);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', dismissContextMenu, true);
+  document.removeEventListener('keydown', handleMenuKey);
+  window.removeEventListener('resize', closeContextMenu);
+  window.removeEventListener('blur', closeContextMenu);
+  if (presentationTimer) window.clearTimeout(presentationTimer);
+  if (resizeTimer) window.clearTimeout(resizeTimer);
+  resizeObserver?.disconnect();
+  const instance = graphInstance;
+  const minimap = instance?.getPluginInstance?.('minimap');
+  minimap?.unbindEvents?.();
+  graphInstance = null;
+  // G6 Minimap keeps a 128ms trailing render without exposing cancellation.
+  // Let that callback drain before destroying its graph context.
+  window.setTimeout(() => {
+    instance?.setPlugins?.([]);
+    instance?.destroy();
+  }, 180);
+});
+</script>
+
+<template>
+  <section class="graph-area g6-graph-area">
+    <div class="canvas-stats" aria-label="图谱统计">
+      <div class="stat"><span>节点</span><strong>{{ graph.pages.length }}</strong></div>
+      <div class="stat"><span>跳转</span><strong>{{ graph.edges.length }}</strong></div>
+      <div class="stat"><span>引擎</span><strong>G6</strong></div>
+    </div>
+    <div v-if="functionHighlightActive" class="canvas-function-filter">
+      <Icon icon="ant-design:apartment-outlined" :size="14" />
+      <span>官方功能</span>
+      <strong>{{ functionHighlightLabel }}</strong>
+      <em>{{ highlightedPageIds.length }} 个页面</em>
+    </div>
+    <div v-if="testCase" class="canvas-case-filter" :class="{ running: caseExecution.status === 'running' }">
+      <Icon :icon="testCase.caseType === 'path' ? 'ant-design:branches-outlined' : 'ant-design:thunderbolt-outlined'" :size="14" />
+      <span>{{ testCase.caseType === 'path' ? '路径采集' : '场景性能' }}</span>
+      <strong>{{ testCase.caseName }}</strong>
+      <em v-if="caseExecution.caseId === testCase.caseId && caseExecution.status === 'running'">
+        步骤 {{ caseExecution.currentStep }}/{{ testCase.steps.length }}
+      </em>
+    </div>
+
+    <div ref="containerRef" class="g6-canvas" tabindex="-1" @contextmenu.prevent />
+    <a-empty v-if="!loading && !graph.pages.length" class="canvas-empty-state" description="暂无主树页面" />
+    <div v-if="hoveredPage" class="graph-node-tooltip">
+      <strong>{{ hoveredPage.displayTitle }}</strong>
+      <p>{{ hoveredPage.pageText || '暂无页面描述' }}</p>
+      <span>{{ hoveredPage.pageUrl || '暂无页面 URL' }}</span>
+    </div>
+    <div v-if="loading || rendering" class="g6-rendering">
+      {{ loading ? '正在加载图谱' : '正在计算布局' }}
+    </div>
+
+    <Teleport to="body">
+      <div v-if="contextMenu" ref="contextMenuRef" class="graph-context-menu"
+        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        @contextmenu.prevent @wheel.stop>
+        <div class="graph-context-menu-title">{{ contextMenu.title }}</div>
+        <a-menu :selectable="false" @click="chooseContextAction" aria-label="节点操作">
+          <a-menu-item key="preview"><Icon icon="ant-design:expand-outlined" /> 查看截图</a-menu-item>
+          <a-menu-item key="edit" :disabled="mutationBusy"><Icon icon="ant-design:edit-outlined" /> 编辑节点</a-menu-item>
+          <a-menu-item key="images" :disabled="mutationBusy"><Icon icon="ant-design:picture-outlined" /> 添加截图</a-menu-item>
+          <a-menu-item key="create" :disabled="mutationBusy"><Icon icon="ant-design:plus-outlined" /> 新建游离节点</a-menu-item>
+          <a-menu-divider />
+          <a-menu-item key="delete" danger :disabled="mutationBusy"><Icon icon="ant-design:delete-outlined" /> 删除节点</a-menu-item>
+        </a-menu>
+      </div>
+      <div v-if="previewPage" class="image-preview-overlay" @click="previewPage = null">
+        <div class="image-preview-shell" @click.stop>
+          <GraphButton
+            class="image-preview-close"
+            icon-only
+            html-type="button"
+            aria-label="关闭预览"
+            title="关闭预览"
+            @click="previewPage = null"
+          >
+            <template #icon><Icon icon="ant-design:close-outlined" :size="16" /></template>
+          </GraphButton>
+          <SmartImage
+            class="image-preview-full"
+            :candidates="previewCandidates"
+            :title="previewPage.displayTitle"
+            kind="页面截图"
+          />
+        </div>
+      </div>
+    </Teleport>
+  </section>
+</template>
+
+<style scoped>
+.canvas-empty-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.graph-context-menu { position: fixed; z-index: 1050; width: 220px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: 0 8px 28px #17203326; }
+.graph-context-menu-title { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #697586; font-size: 12px; overflow-wrap: anywhere; }
+.graph-context-menu :deep(.ant-menu) { border: 0; }
+</style>

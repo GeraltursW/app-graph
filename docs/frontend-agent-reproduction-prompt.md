@@ -6,7 +6,7 @@
 - 有现有工程：同时提供 src/、package.json、接口文档和当前页面截图，要求增量修改。
 - 空白工程：直接使用下方“可复制提示词”，先生成纯前端 Mock 版本，再按已知接口联调。
 - 视觉严格复刻：提供 1280×720 或 1440×900 截图作为比对依据。文字规格不能保证像素级相同。
-- 本提示词以 2026-09-07 的确认结果为基准。不是早期 Vue Flow/shadcn 版本，不要求复刻历史 CSS 冲突或重复规则。
+- 视觉与业务以 2026-09-07 的确认结果为基准，目录结构于 2026-09-15 更新。不是早期 Vue Flow/shadcn 版本，不要求复刻历史 CSS 冲突或重复规则。
 
 ---
 
@@ -52,46 +52,77 @@ src/
   global.css
   components/Icon/Icon.vue
   utils/http/axios/index.ts
-  mock/
-    appGraph.ts
-    projectBaseline.ts
-    captureImports.ts
-    coverageReports.ts
   views/app-graph/
     index.vue
+    workspace.config.ts
     style.css
-    info.api.ts
-    info.data.ts
-    governance.api.ts
-    capture.api.ts
-    data/
-      graph.js
-      projectBaseline.js
+    baseline/
+      ProjectBaselinePanel.vue
+      baseline.api.ts
+      baseline.data.js
+      baseline.mock.ts
       baselineExcel.worker.js
+    capture-import/
+      CaptureImportPanel.vue
+      capture.api.ts
+      capture.mock.ts
       capturePackage.js
       capturePackage.worker.js
       captureDemo.ts
-      functionTree.ts
-      testCases.js
-      testReports.js
-    components/
+    graph/
+      GraphCanvas.vue
       TreeNav.vue
       TreeItem.vue
-      GraphCanvas.vue
       InspectorPanel.vue
-      ProjectBaselinePanel.vue
-      CaptureImportPanel.vue
-      GovernanceWorkspace.vue
+      graph.api.ts
+      graph.data.js
+      graph.config.ts
+      graph.mock.ts
+      nodes/AppPageNode.js
+    function-tree/
+      OfficialFunctionTree.vue
+      FunctionReviewPanel.vue
+      FunctionTreeImportDialog.vue
+      functionTree.api.ts
+      functionTree.data.ts
+      functionTree.mock.ts
+    orphans/
+      OrphanMergePanel.vue
+      orphan.api.ts
+    coverage-report/
+      CoverageReportPanel.vue
       CoverageTrend.vue
+      coverageReport.api.ts
+      coverageReport.mock.ts
+    test-case/
+      TestCaseNav.vue
       TestCasePanel.vue
+      ScenarioCaseBuilder.vue
+      testCase.data.js
+      testCase.mock.ts
+    test-report/
       TestReportDashboard.vue
-      PromoJourney.vue
-      graph/AppPageNode.js
-      shared/GraphButton.vue
-      shared/SmartImage.vue
+      TestReportNav.vue
+      TestReportEvidence.vue
+      PerformanceTrendChart.vue
+      testReport.api.ts
+      testReport.mock.js
+    governance/GovernanceWorkspace.vue
+    promo/PromoJourney.vue
+    shared/
+      api.config.ts
+      image.api.ts
+      images.js
+      GraphButton.vue
+      SmartImage.vue
+      ui.ts
 ```
 
-index.vue 只编排状态和事件；归一化、接口、文件解析、静态配置分别放在独立文件。不要把整个系统塞进一个超过数千行的组件。
+按业务模块归拢组件、API、解析器、Worker 和 Mock。index.vue 保留跨模块状态与事件编排；模块私有逻辑放在本模块目录内。不要重新建立聚合所有接口的 info.api.ts 或用 URL 前缀分发业务的 governance.api.ts。
+
+shared 只放公共基础能力，不反向依赖业务模块。接口统一从 shared/api.config.ts 读取基础地址与 Mock 开关。GovernanceWorkspace 只承载批量并入/日报入口和抽屉切换，数据、错误、请求状态分别由 orphans 与 coverage-report 管理。
+
+保留 style.css 的既有层叠顺序和三栏视觉；不要在目录重构时顺手重写整个样式系统。
 
 独立 Demo 可以直接在根页面显示 AppGraph；嵌入 Vben Admin 时作为 /app-graph 路由视图，使用宿主布局，不再重复输出大标题。不要把它做成 iframe。
 
@@ -454,13 +485,13 @@ interface AppPage {
 已有仓库时优先检查：
 - src/App.vue、src/global.css：独立Demo外层。
 - src/views/app-graph/index.vue、style.css：实际首屏和三栏。
-- components/shared/GraphButton.vue：紧凑按钮的既有样式。
-- components/GraphCanvas.vue、graph/AppPageNode.js：G6实例、节点和大图呈现。
-- components/InspectorPanel.vue：右侧与独立编辑Modal。
-- components/ProjectBaselinePanel.vue、CaptureImportPanel.vue、GovernanceWorkspace.vue：右侧管理入口及工作台。
-- [今日迭代记录](20260907-daily-summary.md)
+- shared/GraphButton.vue：紧凑按钮的既有样式。
+- graph/GraphCanvas.vue、graph/nodes/AppPageNode.js：G6实例、节点和大图呈现。
+- graph/InspectorPanel.vue：右侧与独立编辑Modal。
+- baseline/ProjectBaselinePanel.vue、capture-import/CaptureImportPanel.vue、governance/GovernanceWorkspace.vue：右侧管理入口及工作台。
+- [前端模块结构与迁移说明](20260915-frontend-module-refactor.md)
+- [2026-09-07 迭代记录](20260907-daily-summary.md)
 - [基线接口说明](20260907-project-url-baseline.md)
 - [人工采集接口说明](20260907-manual-capture-import.md)
 
 复刻结果应该保留同一套产品语言：桌面工作台、左导航/中图谱/右详情、管理入口右对齐、紧凑AntDV组件、截图证据清晰、人工确认优先。允许修复溢出或旧样式冲突，不允许借复刻之名重设计整个产品。
-

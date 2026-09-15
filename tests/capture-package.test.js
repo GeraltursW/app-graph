@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { readCaptureRows, validateCapturePath } from '../src/views/app-graph/data/capturePackage.js';
+import { readCaptureRows, validateCapturePath } from '../src/views/app-graph/capture-import/capturePackage.js';
 
 test('capture rows preserve blank parents and same-package predecessors', async () => {
   const book=new ExcelJS.Workbook(), sheet=book.addWorksheet('records');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { readBaselineWorkbook, validateBaselineRows, validatePriorityUrls } from '../src/views/app-graph/data/projectBaseline.js';
+import { readBaselineWorkbook, validateBaselineRows, validatePriorityUrls } from '../src/views/app-graph/baseline/baseline.data.js';
 
 test('priority batch trims and deduplicates exact URLs without removing query strings', () => {
   assert.deepEqual(validatePriorityUrls([' a ', 'a', 'a?q=1']), { urls: ['a', 'a?q=1'], inputCount: 3, duplicateCount: 1 });

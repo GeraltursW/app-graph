@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppGraph from './views/app-graph/index.vue';
-import PromoJourney from './views/app-graph/components/PromoJourney.vue';
+import PromoJourney from './views/app-graph/promo/PromoJourney.vue';
 </script>
 
 <template>
